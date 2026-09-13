@@ -1,0 +1,17 @@
+# Une specification prete : tous les tests d'acceptation ont pu etre ecrits.
+version: 1
+spec: "issue #128 — exiger un proprietaire sur chaque note du corpus"
+
+tests:
+  - id: owner-absent-signale
+    assertion: "une note sans metadata.owner produit un constat quand policy.require_owner est actif"
+    status: writable
+  - id: owner-present-silencieux
+    assertion: "une note portant un owner ne produit aucun constat"
+    status: writable
+  - id: regle-inactive-par-defaut
+    assertion: "sans policy.require_owner, aucune note ne produit de constat d'appartenance"
+    status: writable
+
+facts:
+  - reference-index-est-le-routeur

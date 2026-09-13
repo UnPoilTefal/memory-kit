@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/UnPoilTefal/memory-kit/schema/readiness.schema.json",
+  "title": "Readiness assessment",
+  "description": "Evaluation de readiness d'une specification. L'auteur consigne les tests d'acceptation qu'il a su ecrire et les carences qu'il a rencontrees ; le verdict est derive, jamais declare.",
+  "type": "object",
+  "required": ["version", "spec", "tests"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": 1 },
+    "spec": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 300,
+      "description": "Reference de la specification evaluee : issue, PR, page, chemin."
+    },
+    "tests": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Les tests d'acceptation. Celui qu'on ne sait pas ecrire localise la zone d'ombre : c'est l'information, pas l'echec.",
+      "items": {
+        "type": "object",
+        "required": ["id", "assertion", "status"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+          "assertion": { "type": "string", "minLength": 10, "maxLength": 400 },
+          "status": {
+            "description": "writable = l'assertion est ecrite et verifiable. blocked = elle ne peut pas l'etre, et blocked_by dit pourquoi.",
+            "enum": ["writable", "blocked"]
+          },
+          "blocked_by": { "type": "string", "description": "Identifiant de la carence qui empeche d'ecrire ce test." }
+        }
+      }
+    },
+    "deficiencies": {
+      "type": "array",
+      "description": "Les carences rencontrees, classees. La classification decide de l'issue, pas l'appreciation de l'auteur.",
+      "items": {
+        "type": "object",
+        "required": ["id", "classification", "statement"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+          "classification": {
+            "description": "mesurable = l'agent peut aller la combler. connaissance = le savoir n'est dans aucune source declaree. intention = seule l'ambiguite d'intention justifie de rendre la main.",
+            "enum": ["mesurable", "connaissance", "intention"]
+          },
+          "statement": { "type": "string", "minLength": 10, "maxLength": 400 },
+          "resolved": {
+            "type": "boolean",
+            "default": false,
+            "description": "Pour une carence mesurable : l'agent est alle la combler."
+          },
+          "resolved_by": { "type": "string", "maxLength": 300 }
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "description": "Notes du corpus mobilisees. Leur fraicheur conditionne le verdict : s'appuyer sur un fait dont la preuve ne tient plus, c'est agir sur une premisse fausse.",
+      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+    }
+  }
+}

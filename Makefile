@@ -23,6 +23,7 @@ vet: ## Analyse statique
 dogfood: build ## Appliquer le kit a son propre corpus et a son registre d'exemple
 	./bin/$(BINARY) lint examples/corpus --strict
 	./bin/$(BINARY) perimeter examples/perimeter.yml
+	./bin/$(BINARY) gate examples/readiness/prete.yml --corpus examples/corpus --no-record
 
 verify: build ## Rejouer les preuves du corpus d'exemple
 	./bin/$(BINARY) verify examples/corpus --allow-exec

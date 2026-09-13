@@ -1,0 +1,17 @@
+# Une carence mesurable : l'agent peut aller la combler seul, sans rendre la main.
+version: 1
+spec: "issue #131 — alerter quand une source du registre ne repond plus"
+
+tests:
+  - id: sonde-en-echec-signale
+    assertion: "une source dont la sonde echoue produit un constat nommant la source"
+    status: writable
+  - id: seuil-de-bruit
+    assertion: "une source en echec depuis moins que le seuil tolere ne produit pas d'alerte"
+    status: blocked
+    blocked_by: seuil-inconnu
+
+deficiencies:
+  - id: seuil-inconnu
+    classification: mesurable
+    statement: "le seuil de tolerance aux echecs transitoires n'est pas connu — il se lit dans l'historique du journal"
