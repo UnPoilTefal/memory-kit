@@ -57,12 +57,10 @@ homebrew_casks:
       owner: UnPoilTefal
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-      # Le tap porte le ruleset protect-main sans bypass : un push direct y
-      # est refuse (409 Repository rule violations). GoReleaser ouvre donc une
-      # pull request, qu'il reste a merger — la protection est respectee
-      # plutot que contournee.
-      pull_request:
-        enabled: true
+      # Push direct : le tap n'a pas de pull requests (desactivees), et sa
+      # regle « pull_request » a ete retiree du ruleset — elle rendait le
+      # depot impossible a ecrire par l'un comme par l'autre chemin. La
+      # protection contre la suppression et le force-push, elle, reste.
     homepage: "https://github.com/UnPoilTefal/memory-kit"
     description: "Outillage d'un corpus de memoire agent : lint structurel, preuves rejouees, porte de readiness"
     license: "MIT"
