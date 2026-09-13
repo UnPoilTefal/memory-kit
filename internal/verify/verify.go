@@ -154,6 +154,10 @@ func runCheck(chk corpus.Check, timeout time.Duration) CheckResult {
 
 	cmd := exec.CommandContext(ctx, "sh", "-c", chk.Cmd)
 	cmd.Env = os.Environ()
+	isolateProcessGroup(cmd)
+	// Filet de securite : meme si un descendant survit a l'annulation, la
+	// lecture du resultat doit rendre la main.
+	cmd.WaitDelay = 2 * time.Second
 	out, err := cmd.Output()
 	stdout := strings.TrimSpace(string(out))
 	cr.Stdout = truncate(stdout, 200)
