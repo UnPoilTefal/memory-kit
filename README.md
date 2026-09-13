@@ -48,8 +48,23 @@ Les confondre dans un wiki unique est le mode d'échec le plus courant.
 ## Installation
 
 ```bash
-go install github.com/UnPoilTefal/memory-kit/cmd/memctl@latest
+brew install UnPoilTefal/tap/memory-kit
 ```
+
+<details>
+<summary>Autres canaux</summary>
+
+```bash
+# Binaires : https://github.com/UnPoilTefal/memory-kit/releases
+
+# Depuis les sources (suppose une chaîne Go)
+go install github.com/UnPoilTefal/memory-kit/cmd/memctl@latest
+
+# En CI, sans installer Go
+docker run --rm -v "$PWD:/w" -w /w ghcr.io/unpoiltefal/memory-kit:latest lint memory/
+```
+
+</details>
 
 ## Démarrage
 

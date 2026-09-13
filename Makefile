@@ -30,7 +30,13 @@ verify: build ## Rejouer les preuves du corpus d'exemple
 
 check: vet test dogfood ## Tout ce que la CI verifie
 
-clean: ## Supprimer les artefacts de build
-	rm -rf bin
+snapshot: ## Construire une release locale sans rien publier
+	go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean --skip=publish,docker
 
-.PHONY: help build install test vet dogfood verify check clean
+release-check: ## Valider la configuration GoReleaser
+	go run github.com/goreleaser/goreleaser/v2@latest check
+
+clean: ## Supprimer les artefacts de build
+	rm -rf bin dist
+
+.PHONY: help build install test vet dogfood verify check snapshot release-check clean
