@@ -1,0 +1,5 @@
+version: 1
+corpus:
+  index: ""
+verify:
+  timeout_seconds: 5

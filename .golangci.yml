@@ -1,0 +1,10 @@
+version: "2"
+# Le code et les commentaires sont en francais : misspell est desactive,
+# il corrigerait vers l'anglais.
+linters:
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused

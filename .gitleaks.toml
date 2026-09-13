@@ -1,0 +1,16 @@
+# Configuration gitleaks du projet.
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+[rules.allowlist]
+description = "Le corpus de test porte un faux jeton, servant de temoin a la regle secret du lint."
+paths = ['''internal/lint/testdata/corpus/reference-secret\.md''']
+
+[allowlist]
+description = "Temoins de test et definitions de motifs."
+paths = [
+  '''internal/lint/testdata/.*''',
+  '''internal/lint/lint\.go''',
+]

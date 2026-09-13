@@ -1,0 +1,45 @@
+# Rejoue les preuves attachees aux faits du corpus, et ouvre une pull request
+# quand l'une d'elles ne tient plus.
+#
+# Ce workflow execute du shell declare dans des fichiers markdown. Il ne tourne
+# donc que sur la branche par defaut et jamais sur une pull request : une PR
+# venant d'un fork pourrait autrement faire executer n'importe quoi.
+name: memory-verify
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Rejouer les preuves
+        id: verify
+        continue-on-error: true
+        run: go run ./cmd/memctl verify examples/corpus --allow-exec --write
+
+      - name: Ouvrir une pull request d'ecart
+        if: steps.verify.outcome == 'failure'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: memory/verify-drift
+          title: ":mag: memoire : des preuves ne tiennent plus"
+          commit-message: ":mag: memoire : resultat de verification"
+          body: |
+            `memctl verify` a trouve des faits dont la preuve ne tient plus.
+
+            Pour chacun, trancher : est-ce **le fait** qui etait faux, ou **le monde**
+            qui a change ? Les deux se corrigent differemment — ne pas se contenter
+            d'ajuster la commande jusqu'a ce qu'elle passe.

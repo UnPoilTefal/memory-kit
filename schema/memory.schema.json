@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/UnPoilTefal/memory-kit/schema/memory.schema.json",
+  "title": "Memory note",
+  "description": "Frontmatter d'une note de mémoire atomique. Un fichier = un fait.",
+  "type": "object",
+  "required": ["name", "description", "metadata"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Identifiant stable, kebab-case. Doit egaler le nom du fichier sans extension.",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "maxLength": 80
+    },
+    "description": {
+      "type": "string",
+      "description": "Phrase unique servant au routage du rappel. C'est ce que l'agent lit pour decider si la note est pertinente : elle doit enoncer le fait, pas le sujet.",
+      "minLength": 20,
+      "maxLength": 400
+    },
+    "metadata": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "description": "Registre de memoire. Voir docs/STANDARDS.md.",
+          "enum": ["user", "feedback", "project", "reference", "decision"]
+        },
+        "trust": {
+          "description": "Niveau de confiance. canon = revu en PR par le proprietaire du domaine ; proposed = ecrit par un agent, non revu ; personal = portee individuelle, jamais promu sans revue.",
+          "enum": ["canon", "proposed", "personal"],
+          "default": "canon"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Handle ou equipe responsable de la peremption de cette note. Sans proprietaire, personne ne supprime jamais rien."
+        },
+        "source": {
+          "type": "string",
+          "description": "Provenance du fait : URL d'incident, PR, runbook, session d'agent."
+        },
+        "modified": {
+          "type": "string",
+          "description": "Date de derniere modification (RFC3339 ou YYYY-MM-DD)."
+        },
+        "review_after": {
+          "type": "string",
+          "format": "date",
+          "description": "Date au-dela de laquelle la note doit etre relue. Sinon, budget global du corpus.",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "verify": {
+          "type": "array",
+          "description": "Commandes prouvant que le fait est encore vrai. Code executable : relu comme du code, protege par CODEOWNERS.",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["cmd"],
+            "additionalProperties": false,
+            "properties": {
+              "cmd": {
+                "type": "string",
+                "description": "Commande shell, idempotente et en lecture seule.",
+                "minLength": 1
+              },
+              "expect_exit": {
+                "type": "integer",
+                "description": "Code de sortie attendu. Defaut 0.",
+                "default": 0
+              },
+              "expect_stdout": {
+                "type": "string",
+                "description": "Expression reguliere (RE2) que stdout doit satisfaire."
+              },
+              "note": {
+                "type": "string",
+                "description": "Ce que cette commande prouve, en une ligne."
+              }
+            }
+          }
+        },
+        "verified_at": {
+          "type": "string",
+          "description": "Horodatage du dernier passage de memctl verify. Ecrit par l'outil, pas a la main.",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}"
+        },
+        "verify_status": {
+          "description": "Resultat du dernier passage. Ecrit par l'outil.",
+          "enum": ["pass", "fail", "error", "skipped"]
+        }
+      }
+    }
+  }
+}

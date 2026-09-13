@@ -1,0 +1,4 @@
+# Les commandes de verification sont du shell execute par la CI : toute
+# modification du corpus passe par une relecture.
+/examples/corpus/  @UnPoilTefal
+/schema/           @UnPoilTefal

@@ -1,0 +1,24 @@
+version: 1
+
+corpus:
+  path: .
+  index: MEMORY.md
+
+policy:
+  types: [user, feedback, project, reference, decision]
+  max_body_words: 400
+  # Corpus d'equipe : chaque note a un proprietaire, sinon personne ne la
+  # supprimera jamais.
+  require_owner: true
+  staleness:
+    # Un corpus reel utilise ~180 jours. Ce corpus-ci sert d'exemple figé :
+    # le budget est volontairement long pour que la CI ne le declare pas
+    # perime au bout de six mois.
+    review_after_days: 3650
+    max_stale_ratio: 0.15
+
+links:
+  ignore_prefixes: ["/"]
+
+verify:
+  timeout_seconds: 30
