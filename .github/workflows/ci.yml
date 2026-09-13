@@ -43,17 +43,36 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - run: go run ./cmd/memctl lint examples/corpus --format github --strict
+      # Binaire compile plutot que « go run » : ce dernier ne propage pas le
+      # code de sortie du programme, il sort en 1 quel qu'il soit — ce qui
+      # rendrait invisible la verification des verdicts ci-dessous.
+      - run: go build -o bin/memctl ./cmd/memctl
+
+      - run: ./bin/memctl lint examples/corpus --format github --strict
+
       # Le registre d'exemple est la documentation executable du format :
-      # il doit rester coherent, roles pourvus et sources sondables.
-      - run: go run ./cmd/memctl perimeter examples/perimeter.yml
-      # La porte s'applique a ses propres exemples : chaque verdict attendu
-      # est verifie par le code de sortie (0 produire, 1 instruire, 2 rendre).
-      - run: go run ./cmd/memctl gate examples/readiness/prete.yml --corpus examples/corpus --no-record
-      - run: |
-          go run ./cmd/memctl gate examples/readiness/a-instruire.yml --no-record && exit 1 || [ $? -eq 1 ]
-      - run: |
-          go run ./cmd/memctl gate examples/readiness/a-rendre.yml --no-record && exit 1 || [ $? -eq 2 ]
+      # roles pourvus et sources sondables.
+      - run: ./bin/memctl perimeter examples/perimeter.yml
+
+      # La porte s'applique a ses propres exemples. Le verdict attendu est
+      # verifie par le code de sortie : 0 produire, 1 instruire, 2 rendre.
+      - name: Verdicts de la porte
+        run: |
+          attendu() {
+            local fichier=$1 code=$2; shift 2
+            set +e
+            ./bin/memctl gate "$fichier" --no-record "$@" >/dev/null
+            local obtenu=$?
+            set -e
+            if [ "$obtenu" -ne "$code" ]; then
+              echo "::error file=$fichier::verdict attendu (code $code), obtenu code $obtenu"
+              return 1
+            fi
+            echo "  ✓ $fichier — code $obtenu"
+          }
+          attendu examples/readiness/prete.yml       0 --corpus examples/corpus
+          attendu examples/readiness/a-instruire.yml 1
+          attendu examples/readiness/a-rendre.yml    2
 
   secrets:
     runs-on: ubuntu-latest
