@@ -1,0 +1,90 @@
+version: 2
+
+project_name: memory-kit
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: memctl
+    main: ./cmd/memctl
+    binary: memctl
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Les schemas sont embarques dans le binaire, mais les livrer a part
+    # permet de les pointer depuis un editeur sans installer l'outil.
+    files:
+      - README.md
+      - LICENSE
+      - schema/*.json
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+# ─── Homebrew tap ────────────────────────────────────────────────────────────
+# Cask et non formule : GoReleaser a deprecie « brews », Homebrew reservant
+# desormais les formules a ce qui se compile depuis les sources. Le cask
+# genere porte les artefacts macOS et Linux ; en CI, l'image de conteneur
+# reste le chemin recommande.
+homebrew_casks:
+  - name: memory-kit
+    binaries: [memctl]
+    repository:
+      owner: UnPoilTefal
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/UnPoilTefal/memory-kit"
+    description: "Outillage d'un corpus de memoire agent : lint structurel, preuves rejouees, porte de readiness"
+    license: "MIT"
+    hooks:
+      post:
+        # Un binaire telecharge est mis en quarantaine par Gatekeeper, ce qui
+        # le rend inexecutable sans intervention de l'utilisateur.
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/memctl"]
+          end
+
+# ─── Image de conteneur ──────────────────────────────────────────────────────
+# memory-kit est d'abord un outil de CI : une image evite un setup-go dans
+# chaque depot qui l'utilise, et couvre Linux la ou le cask ne va pas.
+dockers_v2:
+  - id: memctl
+    images:
+      - "ghcr.io/unpoiltefal/memory-kit"
+    tags:
+      - "{{ .Version }}"
+      - "latest"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    dockerfile: Dockerfile
+    labels:
+      org.opencontainers.image.source: "https://github.com/UnPoilTefal/memory-kit"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.licenses: "MIT"
+      org.opencontainers.image.description: "Outillage d'un corpus de memoire agent"
