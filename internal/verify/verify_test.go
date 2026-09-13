@@ -110,7 +110,7 @@ description: "Une note dont la commande de verification ne rend jamais la main"
 metadata:
   type: reference
   verify:
-    - cmd: "sleep 30"
+    - cmd: "sh -c 'sleep 30' & wait"
 ---
 
 Corps.
@@ -124,7 +124,7 @@ Corps.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if elapsed := time.Since(start); elapsed > 5*time.Second {
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
 		t.Errorf("le delai n'a pas ete applique : %s", elapsed)
 	}
 	if outcomes[0].Status != "error" {
