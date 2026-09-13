@@ -20,8 +20,9 @@ vet: ## Analyse statique
 	go vet ./...
 	golangci-lint run
 
-dogfood: build ## Appliquer le kit a son propre corpus d'exemple
+dogfood: build ## Appliquer le kit a son propre corpus et a son registre d'exemple
 	./bin/$(BINARY) lint examples/corpus --strict
+	./bin/$(BINARY) perimeter examples/perimeter.yml
 
 verify: build ## Rejouer les preuves du corpus d'exemple
 	./bin/$(BINARY) verify examples/corpus --allow-exec

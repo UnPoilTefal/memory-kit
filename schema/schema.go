@@ -9,3 +9,9 @@ var Memory []byte
 
 // URL est l'identifiant du schema, utilisable dans un editeur.
 const URL = "https://github.com/UnPoilTefal/memory-kit/schema/memory.schema.json"
+
+//go:embed perimeter.schema.json
+var Perimeter []byte
+
+// PerimeterURL est l'identifiant du schema de registre.
+const PerimeterURL = "https://github.com/UnPoilTefal/memory-kit/schema/perimeter.schema.json"

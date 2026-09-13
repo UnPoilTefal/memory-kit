@@ -12,6 +12,7 @@ import (
 
 	"github.com/UnPoilTefal/memory-kit/internal/corpus"
 	"github.com/UnPoilTefal/memory-kit/internal/lint"
+	"github.com/UnPoilTefal/memory-kit/internal/perimeter"
 	"github.com/UnPoilTefal/memory-kit/internal/report"
 	"github.com/UnPoilTefal/memory-kit/internal/verify"
 	"github.com/UnPoilTefal/memory-kit/schema"
@@ -26,6 +27,7 @@ const usage = `memctl — outillage d'un corpus de memoire agent
   memctl lint   [chemin]   verifie la structure du corpus
   memctl verify [chemin]   rejoue les preuves attachees aux faits
   memctl index  [chemin]   compare l'index au corpus (--fix pour completer)
+  memctl perimeter [reg]   valide le registre des sources du perimetre
   memctl init   [chemin]   ecrit un .memory-kit.yml
   memctl schema            ecrit le JSON Schema sur la sortie standard
   memctl version
@@ -46,6 +48,8 @@ func main() {
 		err = cmdVerify(os.Args[2:])
 	case "index":
 		err = cmdIndex(os.Args[2:])
+	case "perimeter":
+		err = cmdPerimeter(os.Args[2:])
 	case "init":
 		err = cmdInit(os.Args[2:])
 	case "schema":
@@ -116,6 +120,8 @@ func cmdVerify(args []string) error {
 	write := fs.Bool("write", false, "inscrit verified_at et verify_status dans les notes")
 	only := fs.String("only", "", "ne verifie que les notes dont le nom contient cette chaine")
 	timeout := fs.Duration("timeout", 0, "delai par commande (defaut : celui du corpus)")
+	regPath := fs.String("perimeter", "", "registre des sources, pour les preuves adossees a une source")
+	probes := fs.Bool("probe-sources", false, "rejoue aussi la sonde de chaque source declaree")
 	root := target(args)
 	_ = fs.Parse(trimPositional(args))
 
@@ -123,8 +129,16 @@ func cmdVerify(args []string) error {
 	if err != nil {
 		return err
 	}
+	var reg *perimeter.Registry
+	if *regPath != "" {
+		reg, err = perimeter.Load(*regPath)
+		if err != nil {
+			return err
+		}
+	}
 	res, outcomes, err := verify.Run(c, verify.Options{
 		AllowExec: *allow, Write: *write, Only: *only, Timeout: *timeout,
+		Registry: reg, ProbeSources: *probes,
 	})
 	if errors.Is(err, verify.ErrExecRefused) {
 		n, _ := res.Stats["verifiable"].(int)
@@ -239,6 +253,54 @@ func syncIndex(c *corpus.Corpus) error {
 	}
 	fmt.Printf("%d accroches regenerees dans %s\n", changed, c.Config.Corpus.Index)
 	return nil
+}
+
+// cmdPerimeter valide le registre : couverture des roles, sources
+// referencees, adaptateurs connus, credentials en reference. C'est la
+// condition d'entree du demarrage — tant qu'elle n'est pas tenue, le
+// perimetre n'est pas decrit.
+func cmdPerimeter(args []string) error {
+	fs := flag.NewFlagSet("perimeter", flag.ExitOnError)
+	root := target(args)
+	_ = fs.Parse(trimPositional(args))
+	if root == "." {
+		root = perimeter.File
+	}
+
+	reg, err := perimeter.Load(root)
+	if err != nil {
+		return err
+	}
+	issues := reg.Check()
+
+	fmt.Printf("%s — %d sources, %d roles sur %d pourvus\n",
+		root, len(reg.Sources), len(Roles(reg)), len(perimeter.Roles))
+
+	if len(issues) == 0 {
+		fmt.Println("\n✓ registre coherent : chaque role est pourvu et chaque source sondable")
+		fmt.Println("  la sonde elle-meme se rejoue avec : memctl verify <corpus> --perimeter " + root + " --probe-sources --allow-exec")
+		return nil
+	}
+	fmt.Printf("\n%d constats :\n", len(issues))
+	for _, i := range issues {
+		fmt.Printf("  - %s\n", i)
+	}
+	return fail(1)
+}
+
+// Roles rend les roles effectivement pourvus par une source existante.
+func Roles(reg *perimeter.Registry) []string {
+	var filled []string
+	for _, role := range perimeter.Roles {
+		b, ok := reg.RoleMap[role]
+		if !ok || b.Source == "" {
+			continue
+		}
+		if _, ok := reg.Sources[b.Source]; ok {
+			filled = append(filled, role)
+		}
+	}
+	return filled
 }
 
 func cmdInit(args []string) error {

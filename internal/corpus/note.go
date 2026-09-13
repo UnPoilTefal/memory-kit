@@ -13,13 +13,22 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Check est une commande prouvant qu'un fait est encore vrai.
+// Check est une preuve attachee a un fait. Elle prend l'une de deux formes,
+// exclusives : une commande ecrite dans la note, ou le renvoi a une source du
+// registre de perimetre. La seconde est preferable des qu'un perimetre est
+// declare — elle survit au changement d'outil, la premiere non.
 type Check struct {
 	Cmd          string `yaml:"cmd"`
+	Source       string `yaml:"source"`
+	Arg          string `yaml:"arg"`
 	ExpectExit   *int   `yaml:"expect_exit"`
 	ExpectStdout string `yaml:"expect_stdout"`
 	Note         string `yaml:"note"`
 }
+
+// ViaSource dit si la preuve passe par le registre plutot que par une
+// commande locale.
+func (c Check) ViaSource() bool { return c.Source != "" }
 
 // WantExit rend le code de sortie attendu, 0 par defaut.
 func (c Check) WantExit() int {

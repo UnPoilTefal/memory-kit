@@ -44,6 +44,9 @@ jobs:
           go-version-file: go.mod
           cache: true
       - run: go run ./cmd/memctl lint examples/corpus --format github --strict
+      # Le registre d'exemple est la documentation executable du format :
+      # il doit rester coherent, roles pourvus et sources sondables.
+      - run: go run ./cmd/memctl perimeter examples/perimeter.yml
 
   secrets:
     runs-on: ubuntu-latest

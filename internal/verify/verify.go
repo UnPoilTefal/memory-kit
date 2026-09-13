@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/UnPoilTefal/memory-kit/internal/corpus"
+	"github.com/UnPoilTefal/memory-kit/internal/perimeter"
 	"github.com/UnPoilTefal/memory-kit/internal/report"
 	"gopkg.in/yaml.v3"
 )
@@ -38,6 +39,16 @@ type Options struct {
 	Timeout   time.Duration
 	Only      string // sous-chaine filtrant les notes par nom
 	Now       time.Time
+
+	// Registry, quand il est fourni, resout les preuves qui renvoient a une
+	// source declaree. Sans lui, ces preuves echouent nommement plutot que
+	// d'etre silencieusement ignorees : une preuve non jouee ne prouve rien,
+	// et le taire donnerait un verdict faussement vert.
+	Registry *perimeter.Registry
+
+	// ProbeSources rejoue aussi la sonde de chaque source declaree. Une
+	// source injoignable invalide toutes les preuves qui en dependent.
+	ProbeSources bool
 }
 
 // Outcome est le resultat pour une note.
@@ -80,7 +91,16 @@ func Run(c *corpus.Corpus, opt Options) (*report.Result, []Outcome, error) {
 		withChecks = append(withChecks, n)
 	}
 
+	viaSource := 0
+	for _, n := range withChecks {
+		for _, c := range n.Metadata.Verify {
+			if c.ViaSource() {
+				viaSource++
+			}
+		}
+	}
 	res.Stats["verifiable"] = len(withChecks)
+	res.Stats["checks_via_source"] = viaSource
 	res.Stats["coverage"] = coverage(c, len(withChecks))
 
 	if len(withChecks) == 0 {
@@ -90,11 +110,15 @@ func Run(c *corpus.Corpus, opt Options) (*report.Result, []Outcome, error) {
 		return res, outcomes, ErrExecRefused
 	}
 
+	if opt.ProbeSources && opt.Registry != nil {
+		outcomes = append(outcomes, probeSources(opt, res)...)
+	}
+
 	pass, fail := 0, 0
 	for _, n := range withChecks {
 		out := Outcome{Note: n.Rel, Status: "pass"}
 		for _, chk := range n.Metadata.Verify {
-			cr := runCheck(chk, opt.Timeout)
+			cr := runResolved(chk, opt)
 			out.Checks = append(out.Checks, cr)
 			if cr.Status != "pass" && out.Status == "pass" {
 				out.Status = cr.Status
@@ -133,6 +157,43 @@ func Run(c *corpus.Corpus, opt Options) (*report.Result, []Outcome, error) {
 	return res, outcomes, nil
 }
 
+// probeSources rejoue la sonde de chaque source declaree. C'est l'axiome
+// applique un cran au-dessus : une boite qui ne verifie que ses faits finit
+// par affirmer sereinement qu'aucun ticket ne contredit, parce que son jeton
+// a expire trois semaines plus tot.
+func probeSources(opt Options, res *report.Result) []Outcome {
+	var outcomes []Outcome
+	ok, ko := 0, 0
+	for _, name := range opt.Registry.SourceNames() {
+		cmd, err := opt.Registry.ProbeOf(name)
+		if err != nil {
+			res.Add(report.Finding{
+				Rule: "source", Severity: report.Error, File: opt.Registry.Path,
+				Message: err.Error(),
+			})
+			ko++
+			continue
+		}
+		cr := runCheck(corpus.Check{Cmd: cmd.Cmd, ExpectExit: cmd.ExpectExit, ExpectStdout: cmd.ExpectStdout}, opt.Timeout)
+		cr.Cmd = "sonde " + name
+		out := Outcome{Note: "source:" + name, Status: cr.Status, Checks: []CheckResult{cr}}
+		outcomes = append(outcomes, out)
+		if cr.Status == "pass" {
+			ok++
+			continue
+		}
+		ko++
+		res.Add(report.Finding{
+			Rule: "source", Severity: report.Error, File: opt.Registry.Path,
+			Message: fmt.Sprintf("source %s : %s", name, cr.Reason),
+			Hint:    "tant que la source ne repond pas, les preuves qui en dependent ne prouvent rien",
+		})
+	}
+	res.Stats["sources_ok"] = ok
+	res.Stats["sources_ko"] = ko
+	return outcomes
+}
+
 func coverage(c *corpus.Corpus, verifiable int) float64 {
 	total := 0
 	for _, n := range c.Notes {
@@ -144,6 +205,41 @@ func coverage(c *corpus.Corpus, verifiable int) float64 {
 		return 0
 	}
 	return float64(verifiable) / float64(total)
+}
+
+// runResolved resout une preuve avant de l'executer : une preuve adossee a
+// une source emprunte l'interrogation declaree au registre, ce qui la rend
+// independante de l'outil concret.
+func runResolved(chk corpus.Check, opt Options) CheckResult {
+	if !chk.ViaSource() {
+		return runCheck(chk, opt.Timeout)
+	}
+	label := fmt.Sprintf("source %s", chk.Source)
+	if chk.Arg != "" {
+		label += " (" + chk.Arg + ")"
+	}
+	if opt.Registry == nil {
+		return CheckResult{
+			Cmd: label, Status: "error", ExitCode: -1,
+			Reason: "aucun registre de perimetre charge : relancer avec --perimeter",
+		}
+	}
+	cmd, err := opt.Registry.Resolve(chk.Source, chk.Arg)
+	if err != nil {
+		return CheckResult{Cmd: label, Status: "error", ExitCode: -1, Reason: err.Error()}
+	}
+	// L'attente declaree dans la note prime sur celle de la source : c'est le
+	// fait qui est verifie, pas la source.
+	resolved := corpus.Check{Cmd: cmd.Cmd, ExpectExit: cmd.ExpectExit, ExpectStdout: cmd.ExpectStdout}
+	if chk.ExpectExit != nil {
+		resolved.ExpectExit = chk.ExpectExit
+	}
+	if chk.ExpectStdout != "" {
+		resolved.ExpectStdout = chk.ExpectStdout
+	}
+	cr := runCheck(resolved, opt.Timeout)
+	cr.Cmd = label
+	return cr
 }
 
 func runCheck(chk corpus.Check, timeout time.Duration) CheckResult {
