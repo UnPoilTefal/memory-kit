@@ -268,6 +268,101 @@ verdict faussement vert.
 
 ---
 
+## La porte de readiness
+
+Une spécification n'est pas prête parce qu'on se sent confiant. Elle est prête quand on sait
+écrire les tests qui diront qu'elle est satisfaite.
+
+> **L'incapacité à écrire le test est le signal.**
+
+On ne sait pas exprimer l'assertion d'une intention qu'on n'a pas comprise — et le blocage est
+localisé : on sait *quel* test résiste, donc quelle partie de la spécification est trouble. Le
+même artefact sert deux fois : **porte** avant de produire, **critère d'acceptation** après.
+
+### Le partage du travail
+
+`memctl` ne juge pas si une spécification est comprise — c'est un binaire, il ne sait pas lire.
+Il fournit **le cadre et le registre des passages** ; l'agent fournit le jugement. C'est la même
+division que pour les preuves : quelqu'un écrit la sonde, l'outil la rejoue.
+
+Le verdict n'est donc **jamais déclaré** — le schéma n'accepte aucun champ `verdict`. Il est
+dérivé de ce qui a été consigné.
+
+```yaml
+# evaluation.yml
+version: 1
+spec: "issue #131 — alerter quand une source ne répond plus"
+
+tests:
+  - id: sonde-en-echec-signale
+    assertion: "une source dont la sonde échoue produit un constat nommant la source"
+    status: writable
+  - id: seuil-de-bruit
+    assertion: "une source en échec depuis moins que le seuil toléré n'alerte pas"
+    status: blocked
+    blocked_by: seuil-inconnu
+
+deficiencies:
+  - id: seuil-inconnu
+    classification: mesurable
+    statement: "le seuil de tolérance n'est pas connu — il se lit dans l'historique du journal"
+
+facts:
+  - reference-index-est-le-routeur
+```
+
+```bash
+memctl gate evaluation.yml --perimeter perimeter.yml --corpus memory/
+```
+
+### Trois classifications, trois issues
+
+| Classification | Issue | Régime |
+|---|---|---|
+| `mesurable` | **instruire** — l'agent va la combler seul | normal |
+| `connaissance` | **rendre la main** — le savoir n'est dans aucune source déclarée | démarrage |
+| `intention` | **rendre la main** — seul arrêt légitime en régime établi | permanent |
+
+Le critère n'est pas « suis-je incertain » mais **« est-ce réductible par déduction »**. Tout ce
+qui est mesurable, l'agent va le chercher ; seule l'ambiguïté d'intention justifie de rendre la
+main. Le code de sortie porte le verdict — `0` produire, `1` instruire, `2` rendre la main — pour
+qu'une automatisation s'y branche.
+
+### Ce que l'outil vérifie seul
+
+Deux préconditions mécaniques, qui empêchent `produire` sans jamais faire rendre la main (par
+construction, l'agent peut aller les régler) :
+
+- **la couverture du périmètre** — un rôle non pourvu, c'est E1 non tenue ;
+- **la fraîcheur des faits mobilisés** — s'appuyer sur un fait dont la preuve ne tient plus,
+  c'est agir sur une prémisse fausse, exactement ce que la porte existe pour empêcher.
+
+Et une cohérence : un test bloqué doit désigner une carence existante, une carence doit bloquer
+quelque chose ou être résolue. Sans ça, omettre de classer ce qui bloque produirait un verdict
+faussement vert.
+
+### Sortir du démarrage
+
+Chaque passage est consigné dans un journal **en ajout seul** — on ne réécrit pas l'histoire des
+verdicts, sinon la mesure de maturité devient déclarative et ne vaut plus rien.
+
+```bash
+memctl readiness
+```
+
+Le démarrage prend fin quand, sur une fenêtre de passages consécutifs, **plus aucune escalade ne
+porte sur une carence de connaissance** — seulement sur l'intention. La mesure est gratuite : la
+porte classe déjà ses escalades. L'instrument qui évalue les spécifications évalue aussi sa
+propre maturité.
+
+**Le régime n'est pas un réglage.** Il se déduit du journal : interactif tant que le démarrage
+dure, par lot ensuite. Aucun drapeau à positionner, rien qui pourrisse.
+
+Si le journal se remplit sans jamais tenir la condition, ce n'est pas une boucle à laisser
+tourner — c'est un diagnostic : *les sources déclarées ne suffisent pas à couvrir le périmètre*.
+
+---
+
 ## Mode d'emploi
 
 ### Le portillon d'écriture

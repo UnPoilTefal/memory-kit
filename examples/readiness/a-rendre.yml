@@ -1,0 +1,15 @@
+# Une ambiguite d'intention : aller mesurer ne sert a rien tant qu'on ne sait
+# pas ce qui est demande. C'est le seul arret legitime en regime etabli.
+version: 1
+spec: "demande orale — ameliorer la gestion des notes obsoletes"
+
+tests:
+  - id: obsolete-detectee
+    assertion: "une note obsolete est detectee"
+    status: blocked
+    blocked_by: obsolete-non-defini
+
+deficiencies:
+  - id: obsolete-non-defini
+    classification: intention
+    statement: "« obsolete » peut designer une note perimee (date depassee), invalidee (preuve en echec) ou inutile (jamais rappelee) — trois remedes differents"

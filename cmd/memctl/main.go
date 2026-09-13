@@ -9,10 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/UnPoilTefal/memory-kit/internal/corpus"
 	"github.com/UnPoilTefal/memory-kit/internal/lint"
 	"github.com/UnPoilTefal/memory-kit/internal/perimeter"
+	"github.com/UnPoilTefal/memory-kit/internal/readiness"
 	"github.com/UnPoilTefal/memory-kit/internal/report"
 	"github.com/UnPoilTefal/memory-kit/internal/verify"
 	"github.com/UnPoilTefal/memory-kit/schema"
@@ -28,6 +30,8 @@ const usage = `memctl — outillage d'un corpus de memoire agent
   memctl verify [chemin]   rejoue les preuves attachees aux faits
   memctl index  [chemin]   compare l'index au corpus (--fix pour completer)
   memctl perimeter [reg]   valide le registre des sources du perimetre
+  memctl gate <evaluation> derive le verdict de readiness d'une specification
+  memctl readiness         etat de sortie de demarrage, et regime qui en decoule
   memctl init   [chemin]   ecrit un .memory-kit.yml
   memctl schema            ecrit le JSON Schema sur la sortie standard
   memctl version
@@ -50,6 +54,10 @@ func main() {
 		err = cmdIndex(os.Args[2:])
 	case "perimeter":
 		err = cmdPerimeter(os.Args[2:])
+	case "gate":
+		err = cmdGate(os.Args[2:])
+	case "readiness":
+		err = cmdReadiness(os.Args[2:])
 	case "init":
 		err = cmdInit(os.Args[2:])
 	case "schema":
@@ -301,6 +309,165 @@ func Roles(reg *perimeter.Registry) []string {
 		}
 	}
 	return filled
+}
+
+// cmdGate derive le verdict d'une evaluation de readiness et consigne le
+// passage. Le code de sortie porte le verdict : 0 produire, 1 instruire,
+// 2 rendre la main — pour qu'une automatisation puisse s'y brancher.
+func cmdGate(args []string) error {
+	fs := flag.NewFlagSet("gate", flag.ExitOnError)
+	regPath := fs.String("perimeter", "", "registre des sources, pour verifier la couverture des roles")
+	corpusPath := fs.String("corpus", "", "corpus de memoire, pour verifier la fraicheur des faits mobilises")
+	ledger := fs.String("ledger", readiness.LedgerFile, "journal des passages")
+	noRecord := fs.Bool("no-record", false, "ne consigne pas ce passage")
+	path := target(args)
+	_ = fs.Parse(trimPositional(args))
+	if path == "." {
+		return fmt.Errorf("indiquer le fichier d'evaluation a passer")
+	}
+
+	a, err := readiness.Load(path)
+	if err != nil {
+		return err
+	}
+	if issues := a.Coherence(); len(issues) > 0 {
+		fmt.Fprintln(os.Stderr, "evaluation incoherente :") //nolint:errcheck // sortie terminal
+		for _, i := range issues {
+			fmt.Fprintf(os.Stderr, "  - %s\n", i) //nolint:errcheck // sortie terminal
+		}
+		return fmt.Errorf("%d incoherence(s) : une carence omise rendrait le verdict faussement vert", len(issues))
+	}
+
+	pre, err := preconditions(*regPath, *corpusPath, a)
+	if err != nil {
+		return err
+	}
+	d := a.Derive(pre)
+
+	fmt.Printf("%s\n\n  verdict : %s\n", d.Spec, strings.ToUpper(string(d.Verdict)))
+	for _, r := range d.Reasons {
+		fmt.Printf("  · %s\n", r)
+	}
+	if d.Escalation != "" {
+		fmt.Printf("\n  escalade classee : %s\n", d.Escalation)
+	}
+
+	if !*noRecord {
+		e := readiness.Entry{
+			At: time.Now().UTC(), Spec: a.Spec, Verdict: d.Verdict,
+			Escalation: d.Escalation, Assessment: filepath.Base(path),
+		}
+		if err := readiness.Append(*ledger, e); err != nil {
+			return fmt.Errorf("journal : %w", err)
+		}
+		fmt.Printf("\n  consigne dans %s\n", *ledger)
+	}
+
+	switch d.Verdict {
+	case readiness.Produire:
+		return nil
+	case readiness.Instruire:
+		return fail(1)
+	default:
+		return fail(2)
+	}
+}
+
+// preconditions rassemble ce que l'outil sait verifier seul : la couverture
+// du perimetre, et la fraicheur des faits sur lesquels l'evaluation s'appuie.
+// S'appuyer sur un fait dont la preuve ne tient plus, c'est agir sur une
+// premisse fausse — exactement ce que la porte existe pour empecher.
+func preconditions(regPath, corpusPath string, a *readiness.Assessment) ([]readiness.Precondition, error) {
+	var pre []readiness.Precondition
+
+	if regPath != "" {
+		reg, err := perimeter.Load(regPath)
+		if err != nil {
+			return nil, err
+		}
+		if issues := reg.Check(); len(issues) > 0 {
+			pre = append(pre, readiness.Precondition{
+				Code:    "perimetre",
+				Message: fmt.Sprintf("%d constat(s) sur le registre : le perimetre n'est pas entierement decrit", len(issues)),
+				Hint:    "memctl perimeter " + regPath,
+			})
+		}
+	}
+
+	if corpusPath == "" || len(a.Facts) == 0 {
+		return pre, nil
+	}
+	c, err := corpus.Load(corpusPath)
+	if err != nil {
+		return nil, err
+	}
+	byName := c.ByName()
+	now := time.Now()
+	for _, name := range a.Facts {
+		n, ok := byName[name]
+		if !ok {
+			pre = append(pre, readiness.Precondition{
+				Code:    "fait-absent",
+				Message: fmt.Sprintf("le fait %q n'existe pas dans le corpus", name),
+			})
+			continue
+		}
+		if n.Metadata.VerifyStatus == "fail" {
+			pre = append(pre, readiness.Precondition{
+				Code:    "preuve-en-echec",
+				Message: fmt.Sprintf("le fait %q porte une preuve en echec", name),
+				Hint:    "relire le fait avant de s'y appuyer",
+			})
+			continue
+		}
+		if due, ok := n.ReviewDue(c.Config.Policy.Staleness.ReviewAfterDays); ok && now.After(due) {
+			pre = append(pre, readiness.Precondition{
+				Code:    "fait-perime",
+				Message: fmt.Sprintf("le fait %q est a relire depuis le %s", name, due.Format("2006-01-02")),
+			})
+		}
+	}
+	return pre, nil
+}
+
+// cmdReadiness rend l'etat de sortie de demarrage. Le regime n'est pas un
+// reglage : il se deduit du journal, donc il ne peut pas pourrir.
+func cmdReadiness(args []string) error {
+	fs := flag.NewFlagSet("readiness", flag.ExitOnError)
+	ledger := fs.String("ledger", readiness.LedgerFile, "journal des passages")
+	window := fs.Int("window", readiness.DefaultWindow, "nombre de passages consecutifs juges")
+	_ = fs.Parse(trimPositional(args))
+
+	entries, err := readiness.ReadLedger(*ledger)
+	if err != nil {
+		return err
+	}
+	m := readiness.Assess(entries, *window)
+
+	phase := "demarrage"
+	if !m.Bootstrap {
+		phase = "regime etabli"
+	}
+	fmt.Printf("%s — %d passage(s) consignes\n\n", *ledger, len(entries))
+	fmt.Printf("  phase  : %s\n", phase)
+	fmt.Printf("  regime : %s\n", m.Mode)
+	fmt.Printf("  %s\n", m.Reason)
+
+	if len(entries) > 0 {
+		fmt.Printf("\n  derniers passages :\n")
+		from := len(entries) - m.Window
+		if from < 0 {
+			from = 0
+		}
+		for _, e := range entries[from:] {
+			esc := ""
+			if e.Escalation != "" {
+				esc = " (" + e.Escalation + ")"
+			}
+			fmt.Printf("    %s  %-14s%s  %s\n", e.At.Format("2006-01-02"), e.Verdict, esc, e.Spec)
+		}
+	}
+	return nil
 }
 
 func cmdInit(args []string) error {

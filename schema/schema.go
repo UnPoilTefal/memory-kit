@@ -15,3 +15,6 @@ var Perimeter []byte
 
 // PerimeterURL est l'identifiant du schema de registre.
 const PerimeterURL = "https://github.com/UnPoilTefal/memory-kit/schema/perimeter.schema.json"
+
+//go:embed readiness.schema.json
+var Readiness []byte
