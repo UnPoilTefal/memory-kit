@@ -4,7 +4,11 @@
   "title": "Memory note",
   "description": "Frontmatter d'une note de mémoire atomique. Un fichier = un fait.",
   "type": "object",
-  "required": ["name", "description", "metadata"],
+  "required": [
+    "name",
+    "description",
+    "metadata"
+  ],
   "additionalProperties": false,
   "properties": {
     "name": {
@@ -21,16 +25,28 @@
     },
     "metadata": {
       "type": "object",
-      "required": ["type"],
+      "required": [
+        "type"
+      ],
       "additionalProperties": true,
       "properties": {
         "type": {
           "description": "Registre de memoire. Voir docs/STANDARDS.md.",
-          "enum": ["user", "feedback", "project", "reference", "decision"]
+          "enum": [
+            "user",
+            "feedback",
+            "project",
+            "reference",
+            "decision"
+          ]
         },
         "trust": {
           "description": "Niveau de confiance. canon = revu en PR par le proprietaire du domaine ; proposed = ecrit par un agent, non revu ; personal = portee individuelle, jamais promu sans revue.",
-          "enum": ["canon", "proposed", "personal"],
+          "enum": [
+            "canon",
+            "proposed",
+            "personal"
+          ],
           "default": "canon"
         },
         "owner": {
@@ -57,12 +73,11 @@
           "minItems": 1,
           "items": {
             "type": "object",
-            "required": ["cmd"],
             "additionalProperties": false,
             "properties": {
               "cmd": {
                 "type": "string",
-                "description": "Commande shell, idempotente et en lecture seule.",
+                "description": "Commande shell, idempotente et en lecture seule. Exclusif avec source.",
                 "minLength": 1
               },
               "expect_exit": {
@@ -77,8 +92,38 @@
               "note": {
                 "type": "string",
                 "description": "Ce que cette commande prouve, en une ligne."
+              },
+              "source": {
+                "type": "string",
+                "description": "Identifiant d'une source du registre de perimetre. Alternative a cmd : la preuve passe alors par l'adaptateur declare, pas par une commande ecrite en dur."
+              },
+              "arg": {
+                "type": "string",
+                "description": "Parametre substitue a ${arg} dans l'interrogation de la source."
               }
-            }
+            },
+            "oneOf": [
+              {
+                "required": [
+                  "cmd"
+                ],
+                "not": {
+                  "required": [
+                    "source"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "source"
+                ],
+                "not": {
+                  "required": [
+                    "cmd"
+                  ]
+                }
+              }
+            ]
           }
         },
         "verified_at": {
@@ -88,7 +133,12 @@
         },
         "verify_status": {
           "description": "Resultat du dernier passage. Ecrit par l'outil.",
-          "enum": ["pass", "fail", "error", "skipped"]
+          "enum": [
+            "pass",
+            "fail",
+            "error",
+            "skipped"
+          ]
         }
       }
     }

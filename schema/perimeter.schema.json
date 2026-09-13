@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/UnPoilTefal/memory-kit/schema/perimeter.schema.json",
+  "title": "Perimeter registry",
+  "description": "Registre des sources d'un perimetre. Declare quelle brique sert quel role, et comment prouver que chaque source repond encore.",
+  "type": "object",
+  "required": [
+    "version",
+    "roles",
+    "sources"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "roles": {
+      "type": "object",
+      "description": "Chaque role du modele de readiness doit etre pourvu. Un role sans source est une carence, pas un choix.",
+      "additionalProperties": false,
+      "properties": {
+        "intention.spec": {
+          "$ref": "#/$defs/binding"
+        },
+        "intention.tickets": {
+          "$ref": "#/$defs/binding"
+        },
+        "contrainte.decisions": {
+          "$ref": "#/$defs/binding"
+        },
+        "contrainte.memoire": {
+          "$ref": "#/$defs/binding"
+        },
+        "etat.declare": {
+          "$ref": "#/$defs/binding"
+        },
+        "etat.reel": {
+          "$ref": "#/$defs/binding"
+        }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "Les briques concretes. Une source est referencee et sondee, jamais recopiee.",
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/source"
+      }
+    }
+  },
+  "$defs": {
+    "binding": {
+      "type": "object",
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "adapter",
+        "reliability",
+        "probe"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "description": "Type de brique. Un adaptateur inconnu est refuse nommement plutot que degrade en silence.",
+          "enum": [
+            "github",
+            "gitlab",
+            "jira",
+            "git",
+            "files",
+            "http",
+            "shell"
+          ]
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "Designation de la brique cote adaptateur : depot, projet, espace, chemin.",
+          "maxLength": 500
+        },
+        "reliability": {
+          "description": "declared = la source porte sa propre fraicheur ; measured = l'agent doit la mesurer a l'usage.",
+          "enum": [
+            "declared",
+            "measured"
+          ]
+        },
+        "credential": {
+          "type": "string",
+          "description": "Reference resolue a l'execution, jamais la valeur. Schemes : env: file: keychain: cmd: op:",
+          "pattern": "^(env|file|keychain|cmd|op):[^\\s]+$",
+          "maxLength": 300
+        },
+        "probe": {
+          "$ref": "#/$defs/command",
+          "description": "Prouve que la source repond et qu'elle est bien celle attendue. Rejouee au meme titre qu'un fait."
+        },
+        "query": {
+          "$ref": "#/$defs/command",
+          "description": "Interrogation parametree, utilisee par les preuves attachees aux notes. ${arg} y est substitue."
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "command": {
+      "type": "object",
+      "required": [
+        "cmd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cmd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Commande en lecture seule. ${endpoint} et ${arg} y sont substitues."
+        },
+        "expect_exit": {
+          "type": "integer",
+          "default": 0
+        },
+        "expect_stdout": {
+          "type": "string",
+          "description": "Expression reguliere RE2 que stdout doit satisfaire."
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Ce que cette commande prouve, en une ligne."
+        }
+      }
+    }
+  }
+}

@@ -13,4 +13,6 @@ description = "Temoins de test et definitions de motifs."
 paths = [
   '''internal/lint/testdata/.*''',
   '''internal/lint/lint\.go''',
+  '''internal/perimeter/perimeter\.go''',
+  '''internal/perimeter/perimeter_test\.go''',
 ]

@@ -1,0 +1,79 @@
+# Registre des sources d'un perimetre — https://github.com/UnPoilTefal/memory-kit
+#
+# Un role du modele de readiness = une brique concrete. La boite reference et
+# sonde ces briques ; elle n'en recopie jamais le contenu. Ce qui est derivable
+# est cherche au moment de l'evaluation, jamais memorise.
+version: 1
+
+roles:
+  intention.spec:
+    source: specs
+    note: ou vit l'intention exprimee
+  intention.tickets:
+    source: tickets
+  contrainte.decisions:
+    source: adr
+  contrainte.memoire:
+    source: memoire
+  etat.declare:
+    source: depots
+  etat.reel:
+    source: cluster
+
+sources:
+  specs:
+    adapter: files
+    endpoint: docs/specs
+    reliability: measured
+    probe:
+      cmd: "test -d ${endpoint}"
+      note: l'espace documentaire est monte et lisible
+
+  tickets:
+    adapter: github
+    endpoint: org/produit
+    reliability: measured
+    # Reference resolue a l'execution. Le registre ne porte jamais la valeur.
+    credential: env:GITHUB_TOKEN
+    probe:
+      cmd: "gh api repos/${endpoint} --jq .full_name"
+      expect_stdout: "^org/produit$"
+      note: l'acces repond, et pointe bien sur le depot attendu
+    query:
+      cmd: "gh api repos/${endpoint}/issues/${arg} --jq .state"
+
+  adr:
+    adapter: git
+    endpoint: docs/decisions
+    reliability: declared
+    probe:
+      cmd: "test -d ${endpoint} && ls ${endpoint}/*.md >/dev/null"
+      note: le registre de decisions existe et n'est pas vide
+
+  memoire:
+    adapter: files
+    endpoint: memory
+    reliability: declared
+    probe:
+      cmd: "test -f ${endpoint}/MEMORY.md"
+      note: le corpus de memoire est present et indexe
+
+  depots:
+    adapter: git
+    endpoint: .
+    reliability: declared
+    probe:
+      cmd: "git -C ${endpoint} rev-parse --is-inside-work-tree"
+      expect_stdout: "^true$"
+    query:
+      cmd: "git -C ${endpoint} log -1 --format=%H -- ${arg}"
+
+  cluster:
+    adapter: http
+    endpoint: https://api.exemple.internal
+    reliability: measured
+    credential: env:CLUSTER_TOKEN
+    probe:
+      cmd: "curl -sf -o /dev/null -w '%{http_code}' ${endpoint}/healthz"
+      expect_stdout: "^200$"
+      note: l'etat reel est interrogeable — la seule preuve de ce qui est

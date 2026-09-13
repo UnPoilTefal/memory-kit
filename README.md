@@ -178,6 +178,96 @@ c'est ce qui rend la preuve exécutable — et c'est une surface d'attaque.
 
 ---
 
+## Le registre de périmètre
+
+Un corpus de mémoire ne vit pas seul. Autour de lui, une équipe a des tickets, des décisions,
+des dépôts, un état réel — chacun avec son accès, ses identifiants, et surtout **son régime de
+fiabilité**. Le registre déclare quelle brique concrète sert quel rôle.
+
+```yaml
+# perimeter.yml
+version: 1
+
+roles:
+  intention.spec:        { source: specs }
+  intention.tickets:     { source: tickets }
+  contrainte.decisions:  { source: adr }
+  contrainte.memoire:    { source: memoire }
+  etat.declare:          { source: depots }
+  etat.reel:             { source: cluster }
+
+sources:
+  tickets:
+    adapter: github
+    endpoint: org/produit
+    reliability: measured
+    credential: env:GITHUB_TOKEN      # une référence, jamais la valeur
+    probe:
+      cmd: "gh api repos/${endpoint} --jq .full_name"
+      expect_stdout: "^org/produit$"
+    query:
+      cmd: "gh api repos/${endpoint}/issues/${arg} --jq .state"
+```
+
+```bash
+memctl perimeter perimeter.yml   # chaque rôle est-il pourvu, chaque source sondable ?
+```
+
+### Les six rôles ne sont pas configurables
+
+`intention.spec`, `intention.tickets`, `contrainte.decisions`, `contrainte.memoire`,
+`etat.declare`, `etat.reel`. Un périmètre qui n'en pourvoit pas un a une **carence**, pas une
+préférence — et le registre la nomme plutôt que de la laisser passer. C'est le premier signal
+qu'un périmètre n'est pas encore décrit.
+
+### Les sources portent leur propre sonde
+
+C'est l'axiome remonté d'un cran. Sans sonde, une boîte qui n'a vérifié que ses *faits* finit
+par affirmer sereinement qu'aucun ticket ne contredit — parce que son jeton a expiré trois
+semaines plus tôt.
+
+```bash
+memctl verify <corpus> --perimeter perimeter.yml --probe-sources --allow-exec
+```
+
+La vérification porte alors sur **les faits, les sources, et le registre**.
+
+### Une preuve peut renvoyer à une source
+
+```yaml
+metadata:
+  verify:
+    - source: tickets          # l'interrogation est résolue par le registre
+      arg: "412"
+      expect_stdout: "^closed$"
+```
+
+Préférable à une commande écrite en dur dès qu'un périmètre est déclaré : le fait survit au
+changement d'outil, la commande non. Changer de traqueur de tickets devient une ligne du
+registre au lieu d'une reprise de toutes les notes.
+
+### Deux invariants, appliqués par le schéma et non par la discipline
+
+**Aucun identifiant en clair.** Le champ `credential` n'accepte qu'une référence
+(`env:` `file:` `keychain:` `cmd:` `op:`), résolue à l'exécution. Une valeur déguisée en
+référence est signalée à la validation.
+
+**Aucune recopie de source.** Le schéma n'offre aucun champ de cache, de miroir ou de
+synchronisation locale : en déclarer un est une erreur de validation. Ce qui est dérivable est
+cherché au moment de l'évaluation, jamais mémorisé — sinon on recrée exactement la péremption
+qu'on cherche à supprimer.
+
+### Compatibilité
+
+Un corpus sans registre garde **exactement** son comportement : `memctl lint` et
+`memctl verify` fonctionnent comme avant. Le registre est additif.
+
+Une preuve qui renvoie à une source alors qu'aucun registre n'est chargé **échoue nommément**
+plutôt que d'être ignorée — une preuve non jouée ne prouve rien, et la taire donnerait un
+verdict faussement vert.
+
+---
+
 ## Mode d'emploi
 
 ### Le portillon d'écriture
