@@ -176,6 +176,17 @@ L'ancrage au registre est le bon : **ne pas deviner ce qu'est un dépôt, demand
 Un motif générique (`mot/mot`) produit 80 % de faux positifs, et un endpoint dégénéré (`.`)
 donne une ancre qui matche tout — les deux mesurés, les deux écartés par le code.
 
+**Un signal ne compte que s'il est proche de la revendication** : dans la `description` ou le
+premier paragraphe. Au-delà, c'est du contexte. Sans cette contrainte, 45 notes d'un corpus de
+101 portaient un signal pour une précision de 20 % après tri humain ; avec, 21 notes et ~38 %.
+Le coût est assumé — une bonne proposition sur neuf est perdue, celle dont le chemin n'apparaît
+qu'au troisième paragraphe.
+
+**Une note qui énonce une absence appelle une sonde inversée.** « Ce chemin n'existe plus »
+se prouve par `! test -e`, pas par `test -e` — qui échouerait alors que la note dit vrai. La
+détection est locale à la phrase portant le signal, et n'accepte que des marqueurs francs :
+« jamais » et « aucun » visaient 24 notes sur 101, dont la plupart n'énoncent aucune absence.
+
 Chaque type porte sa **demi-vie** : un chemin se périme plus vite qu'une convention.
 
 **Deux règles de sûreté, chacune née d'une erreur constatée :**
