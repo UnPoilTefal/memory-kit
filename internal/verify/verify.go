@@ -242,6 +242,13 @@ func runResolved(chk corpus.Check, opt Options) CheckResult {
 	return cr
 }
 
+// RunCheck rejoue une preuve isolee. Expose pour que la porte de readiness
+// puisse verifier la preuve d'une resolution sans reimplementer l'execution
+// ni ses garde-fous.
+func RunCheck(chk corpus.Check, timeout time.Duration) CheckResult {
+	return runCheck(chk, timeout)
+}
+
 func runCheck(chk corpus.Check, timeout time.Duration) CheckResult {
 	cr := CheckResult{Cmd: chk.Cmd, WantExit: chk.WantExit()}
 

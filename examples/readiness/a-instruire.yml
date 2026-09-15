@@ -15,3 +15,11 @@ deficiencies:
   - id: seuil-inconnu
     classification: mesurable
     statement: "le seuil de tolerance aux echecs transitoires n'est pas connu — il se lit dans l'historique du journal"
+    # Une fois comblee, la resolution porterait sa preuve :
+    #   resolved: true
+    #   resolved_by: "lu dans l'historique : 3 echecs consecutifs avant alerte"
+    #   resolved_proof:
+    #     cmd: "..."
+    #     expect_stdout: "^3$"
+    # « je suis alle mesurer X » se prouve par la mesure — sinon c'est
+    # exactement l'affirmation datee que verify existe pour bannir.

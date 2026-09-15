@@ -280,3 +280,132 @@ func TestExemplesLivresSontCoherents(t *testing.T) {
 		}
 	}
 }
+
+// --- la resolution doit porter sa preuve (#25) ---
+
+const avecResolution = `
+version: 1
+spec: "issue #1 — une carence comblee"
+tests:
+  - { id: t-un, assertion: "la chose attendue se produit et se verifie", status: writable }
+deficiencies:
+  - id: d-seuil
+    classification: mesurable
+    statement: "le seuil n'est pas connu, il se lit dans l'historique"
+    resolved: true
+    resolved_by: "lu dans l'historique : 3 echecs consecutifs"
+`
+
+// Une resolution declaree sans dire ce qui a ete fait n'est pas verifiable,
+// meme par un humain.
+func TestUneResolutionSansEnonceEstUneIncoherence(t *testing.T) {
+	body := strings.Replace(avecResolution, `    resolved_by: "lu dans l'historique : 3 echecs consecutifs"`+"\n", "", 1)
+	a, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issues := a.Coherence()
+	if len(issues) == 0 {
+		t.Fatal("une resolution sans resolved_by doit etre signalee")
+	}
+	if !strings.Contains(strings.Join(issues, " "), "d-seuil") {
+		t.Errorf("la carence fautive doit etre nommee : %v", issues)
+	}
+}
+
+// Une resolution seulement affirmee ne bloque pas, mais elle est comptee :
+// c'est ce comptage qui, accumule, montre qu'une porte est contournee.
+func TestUneResolutionAffirmeeEstCompteeSansBloquer(t *testing.T) {
+	a, err := Load(write(t, avecResolution))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := a.Derive(nil)
+	if d.Verdict != Produire {
+		t.Errorf("verdict attendu produire, obtenu %s (%v)", d.Verdict, d.Reasons)
+	}
+	if d.ResolutionsNonProuvees != 1 {
+		t.Errorf("1 resolution non prouvee attendue, comptee %d", d.ResolutionsNonProuvees)
+	}
+	if !strings.Contains(strings.Join(d.Reasons, " "), "sans preuve rejouable") {
+		t.Errorf("la raison doit le dire : %v", d.Reasons)
+	}
+}
+
+func TestUneResolutionProuveeNEstPasComptee(t *testing.T) {
+	body := avecResolution + `    resolved_proof:
+      cmd: "echo 3"
+      expect_stdout: "^3$"
+`
+	a, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := a.Derive(nil)
+	if d.ResolutionsNonProuvees != 0 {
+		t.Errorf("une resolution prouvee ne doit pas etre comptee, obtenu %d", d.ResolutionsNonProuvees)
+	}
+	if !a.Deficiencies[0].Prouvee() {
+		t.Error("la carence porte une preuve, Prouvee() doit le dire")
+	}
+}
+
+// Une preuve ne peut pas etre a la fois une commande et un renvoi a une source.
+func TestUnePreuveDeResolutionEstCommandeOuSourceMaisPasLesDeux(t *testing.T) {
+	body := avecResolution + `    resolved_proof:
+      cmd: "echo 3"
+      source: tickets
+`
+	if _, err := Load(write(t, body)); err == nil {
+		t.Fatal("cmd et source ensemble doivent etre refuses par le schema")
+	}
+}
+
+// Quand la carence est comblee mais le test toujours bloque, la raison doit le
+// dire : il reste a ecrire le test, ce n'est pas une carence de plus.
+func TestUnTestBloqueParUneCarenceCombleeDitQuIlResteAEcrire(t *testing.T) {
+	body := strings.Replace(avecResolution,
+		"{ id: t-un, assertion: \"la chose attendue se produit et se verifie\", status: writable }",
+		"{ id: t-un, assertion: \"la chose attendue se produit et se verifie\", status: blocked, blocked_by: d-seuil }", 1)
+	a, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := a.Derive(nil)
+	if d.Verdict != Instruire {
+		t.Errorf("verdict attendu instruire, obtenu %s", d.Verdict)
+	}
+	joint := strings.Join(d.Reasons, " ")
+	if !strings.Contains(joint, "reste a ecrire") {
+		t.Errorf("la raison doit dire que le test reste a ecrire : %v", d.Reasons)
+	}
+	if strings.Contains(joint, "sans carence qui les explique") {
+		t.Errorf("la carence existe et est comblee, le message ne doit pas dire l'inverse : %v", d.Reasons)
+	}
+}
+
+// Le journal porte le comptage, et la maturite l'agrege sur la fenetre.
+func TestLaMaturiteAgregeLesResolutionsNonProuvees(t *testing.T) {
+	var e []Entry
+	for i := 0; i < 5; i++ {
+		n := 0
+		if i%2 == 0 {
+			n = 1
+		}
+		e = append(e, Entry{Verdict: Produire, ResolutionsNonProuvees: n})
+	}
+	m := Assess(e, 5)
+	if m.NonProuvees != 3 {
+		t.Errorf("3 resolutions non prouvees attendues sur la fenetre, obtenu %d", m.NonProuvees)
+	}
+}
+
+func TestLaFenetreNAgregeQueLesPassagesRetenus(t *testing.T) {
+	e := []Entry{{Verdict: Produire, ResolutionsNonProuvees: 9}}
+	for i := 0; i < 5; i++ {
+		e = append(e, Entry{Verdict: Produire})
+	}
+	if m := Assess(e, 5); m.NonProuvees != 0 {
+		t.Errorf("le passage sorti de la fenetre ne doit plus compter, obtenu %d", m.NonProuvees)
+	}
+}
