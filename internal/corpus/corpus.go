@@ -1,18 +1,18 @@
 package corpus
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/UnPoilTefal/perimeter/internal/perimeter"
 )
 
-// ConfigFile est le nom du fichier de configuration a la racine d'un corpus.
-const ConfigFile = ".corpus.yml"
+// Le corpus n'a pas de fichier de configuration propre : sa politique vit dans
+// la source qui le porte, au registre de perimetre. Une equipe n'ecrit qu'un
+// seul fichier.
 
 // Config decrit un corpus. Les valeurs par defaut correspondent a la
 // disposition d'un repertoire de memoire Claude Code (notes a plat, index
@@ -27,9 +27,9 @@ type Config struct {
 	} `yaml:"corpus"`
 
 	Policy struct {
-		Types       []string `yaml:"types"`
-		MaxBodyWords int     `yaml:"max_body_words"`
-		Staleness   struct {
+		Types        []string `yaml:"types"`
+		MaxBodyWords int      `yaml:"max_body_words"`
+		Staleness    struct {
 			ReviewAfterDays int     `yaml:"review_after_days"`
 			MaxStaleRatio   float64 `yaml:"max_stale_ratio"`
 		} `yaml:"staleness"`
@@ -89,43 +89,41 @@ type IndexEntry struct {
 	Hook   string
 }
 
-// LoadConfig lit .corpus.yml a la racine donnee, ou rend les defauts.
-func LoadConfig(root string) (*Config, error) {
+// ConfigFromPolicy traduit la politique declaree au registre en configuration
+// de corpus. Un champ absent retombe sur le defaut, pour qu'un registre
+// minimal reste utilisable.
+func ConfigFromPolicy(p *perimeter.CorpusPolicy) *Config {
 	cfg := DefaultConfig()
-	raw, err := os.ReadFile(filepath.Join(root, ConfigFile))
-	if os.IsNotExist(err) {
-		return cfg, nil
+	if p == nil {
+		return cfg
 	}
-	if err != nil {
-		return nil, err
+	cfg.Corpus.Index = p.Index
+	if p.Exclude != nil {
+		cfg.Corpus.Exclude = p.Exclude
 	}
-	if err := yaml.Unmarshal(raw, cfg); err != nil {
-		return nil, fmt.Errorf("%s : %w", ConfigFile, err)
+	if len(p.Types) > 0 {
+		cfg.Policy.Types = p.Types
 	}
-	// Un champ absent du fichier retombe sur le defaut.
-	d := DefaultConfig()
-	if cfg.Corpus.Path == "" {
-		cfg.Corpus.Path = d.Corpus.Path
+	if p.MaxBodyWords > 0 {
+		cfg.Policy.MaxBodyWords = p.MaxBodyWords
 	}
-	if len(cfg.Policy.Types) == 0 {
-		cfg.Policy.Types = d.Policy.Types
+	cfg.Policy.RequireOwner = p.RequireOwner
+	if p.Staleness.ReviewAfterDays > 0 {
+		cfg.Policy.Staleness.ReviewAfterDays = p.Staleness.ReviewAfterDays
 	}
-	if cfg.Policy.MaxBodyWords == 0 {
-		cfg.Policy.MaxBodyWords = d.Policy.MaxBodyWords
+	if p.Staleness.MaxStaleRatio > 0 {
+		cfg.Policy.Staleness.MaxStaleRatio = p.Staleness.MaxStaleRatio
 	}
-	if cfg.Policy.Staleness.ReviewAfterDays == 0 {
-		cfg.Policy.Staleness.ReviewAfterDays = d.Policy.Staleness.ReviewAfterDays
+	if p.Links.IgnorePrefixes != nil {
+		cfg.Links.IgnorePrefixes = p.Links.IgnorePrefixes
 	}
-	if cfg.Policy.Staleness.MaxStaleRatio == 0 {
-		cfg.Policy.Staleness.MaxStaleRatio = d.Policy.Staleness.MaxStaleRatio
+	if p.Links.ExternalRoots != nil {
+		cfg.Links.ExternalRoots = p.Links.ExternalRoots
 	}
-	if cfg.Links.IgnorePrefixes == nil {
-		cfg.Links.IgnorePrefixes = d.Links.IgnorePrefixes
+	if p.VerifyTimeoutSeconds > 0 {
+		cfg.Verify.TimeoutSeconds = p.VerifyTimeoutSeconds
 	}
-	if cfg.Verify.TimeoutSeconds == 0 {
-		cfg.Verify.TimeoutSeconds = d.Verify.TimeoutSeconds
-	}
-	return cfg, nil
+	return cfg
 }
 
 // indexLink capture les cibles markdown d'un lien : [titre](fichier.md)
@@ -135,14 +133,21 @@ var indexLink = regexp.MustCompile(`\]\(([^)\s]+\.md)\)`)
 var indexEntry = regexp.MustCompile(`^\s*[-*]\s*\[([^\]]*)\]\(([^)\s]+\.md)\)\s*(?:[—-]\s*(.*))?$`)
 
 // Load charge le corpus enracine en root.
+// Load charge un corpus avec la politique par defaut. C'est l'usage ad hoc :
+// pointer un repertoire sans avoir declare de perimetre.
 func Load(root string) (*Corpus, error) {
+	return LoadWith(root, DefaultConfig())
+}
+
+// LoadWith charge un corpus avec une politique donnee, typiquement celle
+// declaree au registre de perimetre.
+func LoadWith(root string, cfg *Config) (*Corpus, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
 	}
-	cfg, err := LoadConfig(abs)
-	if err != nil {
-		return nil, err
+	if cfg == nil {
+		cfg = DefaultConfig()
 	}
 	notesRoot := filepath.Join(abs, cfg.Corpus.Path)
 	c := &Corpus{Root: notesRoot, Config: cfg}

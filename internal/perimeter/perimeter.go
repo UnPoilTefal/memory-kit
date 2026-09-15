@@ -15,6 +15,7 @@ package perimeter
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -60,15 +61,39 @@ func (c Command) WantExit() int {
 	return *c.ExpectExit
 }
 
+// CorpusRole designe le role dont la source porte le corpus de memoire.
+const CorpusRole = "contrainte.memoire"
+
+// CorpusPolicy est la politique appliquee aux notes d'un corpus. Elle vit dans
+// la source qui porte ce corpus, et nulle part ailleurs : une equipe n'ecrit
+// qu'un fichier.
+type CorpusPolicy struct {
+	Index                string   `yaml:"index"`
+	Exclude              []string `yaml:"exclude"`
+	Types                []string `yaml:"types"`
+	MaxBodyWords         int      `yaml:"max_body_words"`
+	RequireOwner         bool     `yaml:"require_owner"`
+	VerifyTimeoutSeconds int      `yaml:"verify_timeout_seconds"`
+	Staleness            struct {
+		ReviewAfterDays int     `yaml:"review_after_days"`
+		MaxStaleRatio   float64 `yaml:"max_stale_ratio"`
+	} `yaml:"staleness"`
+	Links struct {
+		IgnorePrefixes []string `yaml:"ignore_prefixes"`
+		ExternalRoots  []string `yaml:"external_roots"`
+	} `yaml:"links"`
+}
+
 // Source est une brique concrete du perimetre.
 type Source struct {
-	Adapter     string   `yaml:"adapter"`
-	Endpoint    string   `yaml:"endpoint"`
-	Reliability string   `yaml:"reliability"`
-	Credential  string   `yaml:"credential"`
-	Probe       *Command `yaml:"probe"`
-	Query       *Command `yaml:"query"`
-	Note        string   `yaml:"note"`
+	Adapter     string        `yaml:"adapter"`
+	Endpoint    string        `yaml:"endpoint"`
+	Reliability string        `yaml:"reliability"`
+	Credential  string        `yaml:"credential"`
+	Probe       *Command      `yaml:"probe"`
+	Query       *Command      `yaml:"query"`
+	Corpus      *CorpusPolicy `yaml:"corpus"`
+	Note        string        `yaml:"note"`
 }
 
 // Binding rattache un role a une source.
@@ -83,6 +108,49 @@ type Registry struct {
 	Version int                `yaml:"version"`
 	RoleMap map[string]Binding `yaml:"roles"`
 	Sources map[string]Source  `yaml:"sources"`
+}
+
+// Find remonte l'arborescence depuis dir a la recherche d'un registre, comme
+// on cherche un depot git. Une commande peut ainsi etre lancee depuis
+// n'importe quel sous-repertoire du perimetre.
+func Find(dir string) (string, bool) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	for {
+		candidate := filepath.Join(abs, File)
+		if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
+			return candidate, true
+		}
+		parent := filepath.Dir(abs)
+		if parent == abs {
+			return "", false
+		}
+		abs = parent
+	}
+}
+
+// CorpusSource rend la source qui porte le corpus de memoire, son chemin
+// absolu, et sa politique. Le chemin est resolu relativement au registre, pour
+// qu'une commande lancee d'ailleurs vise le bon repertoire.
+func (r *Registry) CorpusSource() (name string, root string, policy *CorpusPolicy, err error) {
+	b, ok := r.RoleMap[CorpusRole]
+	if !ok || b.Source == "" {
+		return "", "", nil, fmt.Errorf("%s ne pourvoit pas le role %q", r.Path, CorpusRole)
+	}
+	s, ok := r.Sources[b.Source]
+	if !ok {
+		return "", "", nil, fmt.Errorf("%s : le role %q renvoie a la source %q, absente", r.Path, CorpusRole, b.Source)
+	}
+	root = s.Endpoint
+	if root == "" {
+		root = "."
+	}
+	if !filepath.IsAbs(root) {
+		root = filepath.Join(filepath.Dir(r.Path), root)
+	}
+	return b.Source, root, s.Corpus, nil
 }
 
 // Load lit un registre et le valide contre son schema.

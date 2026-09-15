@@ -52,11 +52,27 @@ sources:
 
   memoire:
     adapter: files
-    endpoint: memory
+    endpoint: corpus
     reliability: declared
     probe:
       cmd: "test -f ${endpoint}/MEMORY.md"
       note: le corpus de memoire est present et indexe
+    # Politique du corpus — lue par « perctl lint ». Elle vit ici et nulle part
+    # ailleurs : une equipe n'ecrit qu'un seul fichier.
+    corpus:
+      index: MEMORY.md
+      types: [user, feedback, project, reference, decision]
+      max_body_words: 400
+      # Corpus d'equipe : chaque note a un proprietaire, sinon personne ne la
+      # supprimera jamais.
+      require_owner: true
+      staleness:
+        # Un corpus reel utilise ~180 jours. Ce corpus-ci sert d'exemple fige :
+        # budget long pour que la CI ne le declare pas perime au bout de six mois.
+        review_after_days: 3650
+        max_stale_ratio: 0.15
+      links:
+        ignore_prefixes: ["/"]
 
   depots:
     adapter: git

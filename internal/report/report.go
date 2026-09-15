@@ -32,10 +32,10 @@ type Finding struct {
 
 // Result agrege les constats d'une execution.
 type Result struct {
-	Command  string    `json:"command"`
-	Root     string    `json:"root"`
-	Notes    int       `json:"notes"`
-	Findings []Finding `json:"findings"`
+	Command  string         `json:"command"`
+	Root     string         `json:"root"`
+	Notes    int            `json:"notes"`
+	Findings []Finding      `json:"findings"`
 	Stats    map[string]any `json:"stats,omitempty"`
 }
 

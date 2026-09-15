@@ -53,8 +53,8 @@ type Options struct {
 
 // Outcome est le resultat pour une note.
 type Outcome struct {
-	Note   string `json:"note"`
-	Status string `json:"status"`
+	Note   string        `json:"note"`
+	Status string        `json:"status"`
 	Checks []CheckResult `json:"checks,omitempty"`
 }
 
