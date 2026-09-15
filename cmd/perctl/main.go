@@ -50,7 +50,7 @@ const usage = `perctl — savoir si un agent peut agir sur un perimetre
   perctl propose [chemin]  propose une sonde pour les notes qui n'en portent pas
   perctl draft  [fichier]  juge un brouillon avant de l'ecrire (« - » ou rien : entree standard)
   perctl harvest           propose des candidats depuis les traces deja la (--allow-exec)
-  perctl init   [chemin]   ecrit un .corpus.yml
+  perctl init   [chemin]   ecrit un perimeter.yml : le registre du perimetre
   perctl schema            ecrit le JSON Schema sur la sortie standard
   perctl version
 

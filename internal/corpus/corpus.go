@@ -71,7 +71,9 @@ type Config struct {
 	} `yaml:"verify"`
 }
 
-// DefaultConfig rend la configuration appliquee en l'absence de .corpus.yml.
+// DefaultConfig rend la configuration appliquee quand le registre ne declare
+// aucune politique de corpus. Tout ce qui est fixe ici est un defaut : un
+// registre n'a pas a le reecrire pour l'obtenir.
 func DefaultConfig() *Config {
 	c := &Config{Version: 1}
 	c.Corpus.Path = "."
@@ -120,7 +122,9 @@ func ConfigFromPolicy(p *perimeter.CorpusPolicy) *Config {
 	if p == nil {
 		return cfg
 	}
-	cfg.Corpus.Index = p.Index
+	if p.Index != nil {
+		cfg.Corpus.Index = *p.Index
+	}
 	if p.Exclude != nil {
 		cfg.Corpus.Exclude = p.Exclude
 	}
@@ -327,4 +331,10 @@ func SyncIndexAutorise(c *Corpus) error {
 		return fmt.Errorf("policy.index_hook vaut \"authored\" : les accroches sont ecrites a la main, les regenerer les ecraserait")
 	}
 	return nil
+}
+
+// politiqueAvecIndex sert les tests : elle construit une politique dont seule
+// la cle index varie, nil valant « absente ».
+func politiqueAvecIndex(index *string) *perimeter.CorpusPolicy {
+	return &perimeter.CorpusPolicy{Index: index}
 }

@@ -232,10 +232,11 @@ Corps.
 // corpusAvec depose un corpus minimal et rend sa racine.
 func corpusAvec(t *testing.T, notes map[string]string) string {
 	t.Helper()
+	// Aucun fichier de configuration depose ici : depuis la v0.3.0 la
+	// politique du corpus vit dans le registre, et un .corpus.yml n'est plus
+	// lu. Ce helper en ecrivait encore un — le test passait donc pour une
+	// autre raison que celle qu'il croyait poser.
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ".corpus.yml"), []byte("version: 1\ncorpus:\n  index: \"\"\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	for name, body := range notes {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
 			t.Fatal(err)

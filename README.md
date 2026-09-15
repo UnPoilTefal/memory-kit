@@ -75,7 +75,7 @@ docker run --rm -v "$PWD:/w" -w /w ghcr.io/unpoiltefal/perimeter:latest lint mem
 
 ```bash
 cd <votre corpus>
-perctl init      # écrit .corpus.yml
+perctl init      # écrit perimeter.yml, le registre du périmètre
 perctl lint      # premier état des lieux
 ```
 

@@ -250,7 +250,7 @@ func TestLeRegistrePorteLaPolitiqueDuCorpus(t *testing.T) {
 	if want := filepath.Join(filepath.Dir(reg.Path), "notes"); root != want {
 		t.Errorf("racine attendue %q, obtenue %q", want, root)
 	}
-	if pol == nil || pol.Index != "INDEX.md" || pol.MaxBodyWords != 250 || !pol.RequireOwner {
+	if pol == nil || pol.Index == nil || *pol.Index != "INDEX.md" || pol.MaxBodyWords != 250 || !pol.RequireOwner {
 		t.Errorf("politique mal lue : %+v", pol)
 	}
 	if pol.Staleness.ReviewAfterDays != 90 || len(pol.Links.IgnorePrefixes) != 2 {

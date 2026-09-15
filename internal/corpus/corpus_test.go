@@ -26,7 +26,7 @@ func TestPolitiqueAbsenteRendLesDefauts(t *testing.T) {
 // Test d'acceptation 1 — la politique du registre pilote reellement le lint.
 func TestPolitiqueDuRegistrePiloteLeLint(t *testing.T) {
 	p := &perimeter.CorpusPolicy{
-		Index:        "INDEX.md",
+		Index:        ptr("INDEX.md"),
 		Types:        []string{"reference"},
 		MaxBodyWords: 42,
 		RequireOwner: true,
@@ -55,7 +55,7 @@ func TestPolitiqueDuRegistrePiloteLeLint(t *testing.T) {
 
 // Un champ laisse vide au registre ne doit pas ecraser le defaut par un zero.
 func TestChampVideNEcrasePasLeDefaut(t *testing.T) {
-	got := ConfigFromPolicy(&perimeter.CorpusPolicy{Index: "X.md"})
+	got := ConfigFromPolicy(&perimeter.CorpusPolicy{Index: ptr("X.md")})
 	if got.Policy.MaxBodyWords != DefaultConfig().Policy.MaxBodyWords {
 		t.Errorf("budget de mots ecrase par un zero : %d", got.Policy.MaxBodyWords)
 	}
@@ -63,3 +63,5 @@ func TestChampVideNEcrasePasLeDefaut(t *testing.T) {
 		t.Error("le plafond de peremption ne doit pas tomber a zero")
 	}
 }
+
+func ptr(s string) *string { return &s }
