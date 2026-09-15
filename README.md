@@ -125,7 +125,7 @@ Le schéma complet : [`schema/memory.schema.json`](schema/memory.schema.json)
 | `description` | avert. | une description qui ne permet pas de décider du rappel |
 | `atomicity` | avert. | une note trop large ne se périme jamais proprement |
 | `ownership` | avert. | sans propriétaire, personne ne supprime jamais rien |
-| `staleness` | avert. | une note dont l'échéance de relecture est passée |
+| `staleness` | avert. | une note dont l'échéance de relecture est passée, **ou qui n'a aucune date** |
 | `staleness-budget` | erreur | le corpus dérive plus vite qu'il n'est relu |
 | `secret` | erreur | la mémoire est rechargée à chaque session : c'est un vecteur de fuite |
 
@@ -216,7 +216,10 @@ se prouve par `! test -e`, pas par `test -e` — qui échouerait alors que la no
 détection est locale à la phrase portant le signal, et n'accepte que des marqueurs francs :
 « jamais » et « aucun » visaient 24 notes sur 101, dont la plupart n'énoncent aucune absence.
 
-Chaque type porte sa **demi-vie** : un chemin se périme plus vite qu'une convention.
+Le budget de relecture est **unique pour tout le corpus** — `policy.staleness.review_after_days`.
+Une demi-vie par type, un chemin se périmant plus vite qu'une convention, se défend en principe
+mais n'est pas implémentée : la différencier demanderait des observations qu'aucun corpus n'a
+encore produites. Suivi en [#38](https://github.com/UnPoilTefal/perimeter/issues/38).
 
 **Deux règles de sûreté, chacune née d'une erreur constatée :**
 
