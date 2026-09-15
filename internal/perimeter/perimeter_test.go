@@ -335,3 +335,130 @@ func TestChaqueAdaptateurProposeUneSonde(t *testing.T) {
 		}
 	}
 }
+
+// --- plusieurs sources pour un role (#27) ---
+
+const multiEnv = `
+version: 1
+roles:
+  intention.spec:        { source: specs }
+  intention.tickets:     { source: tickets }
+  contrainte.decisions:  { source: adr }
+  contrainte.memoire:    { source: memoire }
+  etat.declare:          { source: depots }
+  etat.reel:
+    - { source: prod,    qualifier: production }
+    - { source: recette, qualifier: recette }
+sources:
+  specs:    { adapter: files,  reliability: measured, probe: { cmd: "true" } }
+  tickets:  { adapter: github, reliability: measured, probe: { cmd: "true" } }
+  adr:      { adapter: git,    reliability: declared, probe: { cmd: "true" } }
+  memoire:  { adapter: files,  endpoint: notes, reliability: declared, probe: { cmd: "true" } }
+  depots:   { adapter: git,    reliability: declared, probe: { cmd: "true" } }
+  prod:     { adapter: http,   reliability: measured, probe: { cmd: "true" } }
+  recette:  { adapter: http,   reliability: measured, probe: { cmd: "true" } }
+`
+
+// Une brique operee sur plusieurs environnements a plusieurs etats reels.
+func TestUnRolePeutPorterPlusieursSources(t *testing.T) {
+	reg, err := Load(write(t, multiEnv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if is := reg.Check(); len(is) != 0 {
+		t.Fatalf("registre attendu coherent :\n%s", issueText(is))
+	}
+	if n := len(reg.RoleMap["etat.reel"]); n != 2 {
+		t.Errorf("2 sources attendues pour etat.reel, obtenu %d", n)
+	}
+}
+
+// La forme courte reste la norme : la plupart des roles n'ont qu'une source.
+func TestLaFormeCourteResteAcceptee(t *testing.T) {
+	reg, err := Load(write(t, avecCorpus))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, ok := reg.RoleMap["etat.reel"].First()
+	if !ok || b.Source != "cluster" {
+		t.Errorf("forme courte mal lue : %+v", reg.RoleMap["etat.reel"])
+	}
+}
+
+// Sans qualificatif, rien ne dit laquelle des instances une preuve interroge.
+func TestPlusieursSourcesSansQualificatifSontSignalees(t *testing.T) {
+	body := strings.Replace(multiEnv, "{ source: prod,    qualifier: production }", "{ source: prod }", 1)
+	reg, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := issueText(reg.Check())
+	if !strings.Contains(got, "qualifiee") {
+		t.Errorf("le defaut de qualificatif devait etre signale :\n%s", got)
+	}
+}
+
+func TestLaMemeSourceDeuxFoisEstSignalee(t *testing.T) {
+	body := strings.Replace(multiEnv, "{ source: recette, qualifier: recette }", "{ source: prod, qualifier: recette }", 1)
+	reg, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(issueText(reg.Check()), "deux fois") {
+		t.Error("rattacher deux fois la meme source devait etre signale")
+	}
+}
+
+// Une source vide est refusee par le schema, avant meme la coherence : c'est
+// la bonne couche, l'erreur est de forme et non de sens.
+func TestUneSourceVideEstRefuseeParLeSchema(t *testing.T) {
+	body := strings.Replace(multiEnv, `  etat.reel:
+    - { source: prod,    qualifier: production }
+    - { source: recette, qualifier: recette }`, `  etat.reel:
+    - { source: "" }`, 1)
+	if _, err := Load(write(t, body)); err == nil {
+		t.Fatal("une source vide doit etre refusee par le schema")
+	}
+}
+
+// Un role absent du registre reste non pourvu, et c'est la coherence qui le dit.
+func TestUnRoleAbsentResteNonPourvu(t *testing.T) {
+	body := strings.Replace(multiEnv, `  etat.reel:
+    - { source: prod,    qualifier: production }
+    - { source: recette, qualifier: recette }
+`, "", 1)
+	reg, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := issueText(reg.Check())
+	if !strings.Contains(got, "etat.reel") || !strings.Contains(got, "non pourvu") {
+		t.Errorf("le role manquant devait etre nomme :\n%s", got)
+	}
+}
+
+// Un corpus est singulier : plusieurs corpus demandent plusieurs perimetres.
+func TestPlusieursCorpusSontRefuses(t *testing.T) {
+	body := strings.Replace(multiEnv, "  contrainte.memoire:    { source: memoire }", `  contrainte.memoire:
+    - { source: memoire, qualifier: un }
+    - { source: depots,  qualifier: deux }`, 1)
+	reg, err := Load(write(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, _, err = reg.CorpusSource()
+	if err == nil || !strings.Contains(err.Error(), "singulier") {
+		t.Errorf("plusieurs corpus doivent etre refuses nommement, obtenu : %v", err)
+	}
+}
+
+// Une source rattachee a l'une des instances n'est pas orpheline.
+func TestUneSourceDUneInstanceNEstPasOrpheline(t *testing.T) {
+	reg, _ := Load(write(t, multiEnv))
+	if strings.Contains(issueText(reg.Check()), "orpheline") {
+		t.Error("les sources d'un role multiple sont bien rattachees")
+	}
+	if strings.Contains(issueText(reg.Check()), "aucun role") {
+		t.Error("aucune source ne doit etre vue comme non rattachee")
+	}
+}

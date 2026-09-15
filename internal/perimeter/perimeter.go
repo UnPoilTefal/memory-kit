@@ -99,15 +99,53 @@ type Source struct {
 // Binding rattache un role a une source.
 type Binding struct {
 	Source string `yaml:"source"`
-	Note   string `yaml:"note"`
+	// Qualifier distingue plusieurs instances d'un meme role.
+	Qualifier string `yaml:"qualifier"`
+	Note      string `yaml:"note"`
+}
+
+// Bindings porte les sources d'un role. Un role en compte une le plus souvent,
+// plusieurs quand la realite en compte plusieurs : une brique operee sur deux
+// environnements a deux etats reels, et n'en declarer qu'un revient a mentir
+// par omission sur l'autre.
+type Bindings []Binding
+
+// UnmarshalYAML accepte les deux ecritures : une source seule, ou une liste.
+// La forme courte reste la norme — la plupart des roles n'ont qu'une source,
+// et les imposer tous en liste alourdirait le fichier pour rien.
+func (b *Bindings) UnmarshalYAML(value *yaml.Node) error {
+	if value.Kind == yaml.SequenceNode {
+		var liste []Binding
+		if err := value.Decode(&liste); err != nil {
+			return err
+		}
+		*b = liste
+		return nil
+	}
+	var seul Binding
+	if err := value.Decode(&seul); err != nil {
+		return err
+	}
+	*b = Bindings{seul}
+	return nil
+}
+
+// First rend la premiere source du role, et si le role est pourvu.
+func (b Bindings) First() (Binding, bool) {
+	for _, x := range b {
+		if strings.TrimSpace(x.Source) != "" {
+			return x, true
+		}
+	}
+	return Binding{}, false
 }
 
 // Registry est le registre charge.
 type Registry struct {
 	Path    string
-	Version int                `yaml:"version"`
-	RoleMap map[string]Binding `yaml:"roles"`
-	Sources map[string]Source  `yaml:"sources"`
+	Version int                 `yaml:"version"`
+	RoleMap map[string]Bindings `yaml:"roles"`
+	Sources map[string]Source   `yaml:"sources"`
 }
 
 // Find remonte l'arborescence depuis dir a la recherche d'un registre, comme
@@ -135,8 +173,13 @@ func Find(dir string) (string, bool) {
 // absolu, et sa politique. Le chemin est resolu relativement au registre, pour
 // qu'une commande lancee d'ailleurs vise le bon repertoire.
 func (r *Registry) CorpusSource() (name string, root string, policy *CorpusPolicy, err error) {
-	b, ok := r.RoleMap[CorpusRole]
-	if !ok || b.Source == "" {
+	bs := r.RoleMap[CorpusRole]
+	if len(bs) > 1 {
+		return "", "", nil, fmt.Errorf("%s declare %d sources pour %q : un corpus est singulier, plusieurs corpus demandent plusieurs perimetres",
+			r.Path, len(bs), CorpusRole)
+	}
+	b, ok := bs.First()
+	if !ok {
 		return "", "", nil, fmt.Errorf("%s ne pourvoit pas le role %q", r.Path, CorpusRole)
 	}
 	s, ok := r.Sources[b.Source]
@@ -278,8 +321,8 @@ func (r *Registry) Check() []Issue {
 	var issues []Issue
 
 	for _, role := range Roles {
-		b, ok := r.RoleMap[role]
-		if !ok || strings.TrimSpace(b.Source) == "" {
+		bs := r.RoleMap[role]
+		if _, ok := bs.First(); !ok {
 			issues = append(issues, Issue{
 				Role:    role,
 				Message: "role non pourvu",
@@ -287,11 +330,37 @@ func (r *Registry) Check() []Issue {
 			})
 			continue
 		}
-		if _, ok := r.Sources[b.Source]; !ok {
-			issues = append(issues, Issue{
-				Role:    role,
-				Message: fmt.Sprintf("renvoie a la source %q, absente du registre", b.Source),
-			})
+		vus := map[string]bool{}
+		for _, b := range bs {
+			if strings.TrimSpace(b.Source) == "" {
+				continue
+			}
+			if _, ok := r.Sources[b.Source]; !ok {
+				issues = append(issues, Issue{
+					Role:    role,
+					Message: fmt.Sprintf("renvoie a la source %q, absente du registre", b.Source),
+				})
+			}
+			if vus[b.Source] {
+				issues = append(issues, Issue{
+					Role:    role,
+					Message: fmt.Sprintf("rattache deux fois la source %q", b.Source),
+				})
+			}
+			vus[b.Source] = true
+		}
+		// Plusieurs instances d'un meme role doivent se distinguer, sinon
+		// rien ne dit laquelle une preuve interroge.
+		if len(bs) > 1 {
+			for _, b := range bs {
+				if strings.TrimSpace(b.Qualifier) == "" {
+					issues = append(issues, Issue{
+						Role:    role,
+						Message: fmt.Sprintf("la source %q n'est pas qualifiee alors que le role en porte plusieurs", b.Source),
+						Hint:    "nommer ce qui distingue chaque instance : production, recette…",
+					})
+				}
+			}
 		}
 	}
 
@@ -328,8 +397,10 @@ func (r *Registry) Check() []Issue {
 
 	// Une source declaree que plus aucun role n'utilise est du poids mort.
 	used := map[string]bool{}
-	for _, b := range r.RoleMap {
-		used[b.Source] = true
+	for _, bs := range r.RoleMap {
+		for _, b := range bs {
+			used[b.Source] = true
+		}
 	}
 	for _, name := range names {
 		if !used[name] {

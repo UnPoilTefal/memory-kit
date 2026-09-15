@@ -366,8 +366,8 @@ func cmdPerimeter(args []string) error {
 func Roles(reg *perimeter.Registry) []string {
 	var filled []string
 	for _, role := range perimeter.Roles {
-		b, ok := reg.RoleMap[role]
-		if !ok || b.Source == "" {
+		b, ok := reg.RoleMap[role].First()
+		if !ok {
 			continue
 		}
 		if _, ok := reg.Sources[b.Source]; ok {

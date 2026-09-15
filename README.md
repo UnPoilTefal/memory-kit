@@ -312,6 +312,42 @@ sources:
 perctl perimeter perimeter.yml   # chaque rôle est-il pourvu, chaque source sondable ?
 ```
 
+### Un rôle porte une source, ou plusieurs
+
+Une brique opérée sur plusieurs environnements a **autant d'états réels que d'environnements**.
+N'en déclarer qu'un revient à mentir par omission sur les autres.
+
+```yaml
+roles:
+  etat.declare:  { source: depots }          # la forme courte reste la norme
+  etat.reel:
+    - { source: prod,    qualifier: production }
+    - { source: recette, qualifier: recette }
+```
+
+Dès qu'un rôle porte plusieurs sources, chacune doit être **qualifiée** — sinon rien ne dit
+laquelle une preuve interroge.
+
+Le corpus de mémoire fait exception : `contrainte.memoire` n'accepte qu'une source. **Un corpus
+est singulier** ; plusieurs corpus demandent plusieurs périmètres.
+
+### ⚠ L'angle mort du modèle à deux vérités
+
+Comparer le déclaré au réel suppose que l'**intention**, elle, est stable. Quand elle ne l'est
+pas — une cible technique encore en arbitrage, écrite dans la spécification puis remplacée avant
+que rien n'ait bougé — déclaré et réel sont **parfaitement convergents** : ils décrivent tous
+deux l'état d'avant.
+
+> **La convergence entre le déclaré et le réel peut masquer que les deux sont périmés par
+> rapport à l'intention.**
+
+La porte ne voit aucun écart et rassure à tort. Ce n'est pas un rôle qui manque — c'est une
+**carence d'intention**, donc un arrêt légitime, qu'il revient à l'auteur de l'évaluation de
+classer comme telle.
+
+Aucun mécanisme ne la détecte aujourd'hui : elle est invisible à un outil qui ne compare que
+deux états.
+
 ### Les six rôles ne sont pas configurables
 
 `intention.spec`, `intention.tickets`, `contrainte.decisions`, `contrainte.memoire`,
