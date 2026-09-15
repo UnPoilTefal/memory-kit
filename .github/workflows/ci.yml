@@ -117,6 +117,24 @@ jobs:
           attendu examples/readiness/a-instruire.yml 1
           attendu examples/readiness/a-rendre.yml    2
 
+  # Le cask est publie pour quatre plateformes. Un appel propre a macOS sans
+  # garde d'OS y casse l'installation sous Linux, sans message utile.
+  cask:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Rendre le cask et verifier ses gardes d'OS
+        run: |
+          go run github.com/goreleaser/goreleaser/v2@latest release \
+            --snapshot --clean --skip=publish,docker >/dev/null
+          python3 scripts/cask-guard.py dist/homebrew/Casks/perimeter.rb
+
   secrets:
     runs-on: ubuntu-latest
     steps:
