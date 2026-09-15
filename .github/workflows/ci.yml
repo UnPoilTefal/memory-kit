@@ -134,6 +134,23 @@ jobs:
             exit 1
           fi
 
+      # Le registre doit etre adressable autrement que par --perimeter : une
+      # session d'agent ou un job de CI exporte une variable plus facilement
+      # qu'il ne passe un chemin a chaque commande.
+      - name: le registre se resout par PERIMETER, et un chemin absent se signale
+        run: |
+          cd /tmp
+          if PERIMETER="$GITHUB_WORKSPACE/examples/perimeter.yml" "$GITHUB_WORKSPACE/bin/perctl" lint --strict; then
+            echo "resolution par PERIMETER : ok"
+          else
+            echo "::error::PERIMETER n'a pas resolu le registre"
+            exit 1
+          fi
+          if PERIMETER=/tmp/nexiste-pas.yml "$GITHUB_WORKSPACE/bin/perctl" lint 2>/dev/null; then
+            echo "::error::un PERIMETER pointant un fichier absent doit etre signale, pas ignore"
+            exit 1
+          fi
+
       # « harvest » lit par execution : il doit refuser sans --allow-exec, et
       # ne jamais rien ecrire quand il s'execute. Les deux, pas l'un ou l'autre.
       - name: harvest refuse sans --allow-exec et n'ecrit rien

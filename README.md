@@ -627,6 +627,35 @@ redemande au diff. Ce qui ne se redérive pas, c'est le piège et le pourquoi.
 candidats réels, un seuil à 0,15 marquait un vrai doublon, un faux, et en manquait un troisième
 dont la note sortait pourtant en tête. Aucun marqueur binaire n'est donc rendu.
 
+### Où vit le registre — `PERIMETER` et la tour de contrôle
+
+Le registre est cherché dans cet ordre, du plus explicite au plus implicite :
+
+| | |
+|---|---|
+| 1 | `--perimeter <chemin>` |
+| 2 | la variable d'environnement **`PERIMETER`** |
+| 3 | la remontée d'arborescence depuis le répertoire courant, comme `.git` |
+| 4 | `~/.config/perimeter/perimeter.yml` *(ou `$XDG_CONFIG_HOME/perimeter/`)* |
+
+Le niveau 3 sert le modèle **un projet, un périmètre** : une équipe pose son registre à la
+racine du dépôt, et toute commande lancée dedans le trouve.
+
+Le niveau 4 sert le modèle **tour de contrôle** : un opérateur travaille depuis un répertoire
+central et rayonne vers plusieurs dépôts, dont aucun ne porte le registre. La remontée ne trouve
+alors rien — et c'est l'usage qui n'était pas servi.
+
+⚠️ **L'ordre compte.** La remontée prime sur l'emplacement utilisateur : sinon un registre
+personnel masquerait celui du dépôt où l'on se trouve, et une commande lancée dans un projet
+travaillerait ailleurs sans le dire.
+
+⚠️ **Une piste explicite qui ne répond pas n'est pas ignorée.** Si `PERIMETER` pointe un fichier
+absent, l'outil le signale au lieu de retomber sur un autre registre : l'utilisateur a exprimé une
+intention, la taire le ferait travailler sur un autre périmètre sans le savoir.
+
+Quand rien ne répond, le message dit **où l'outil a cherché** — un constat d'absence qui laisse le
+diagnostic à l'utilisateur est précisément ce qui fait vivre ce genre de défaut sans qu'il soit vu.
+
 ### Vérifier un brouillon — `perctl draft`
 
 Le portillon ne se mécanise pas : les trois questions sont des jugements, et un

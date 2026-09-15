@@ -55,6 +55,11 @@ const usage = `perctl — savoir si un agent peut agir sur un perimetre
   perctl version
 
 Le chemin vaut « . » par defaut. Detail des regles et mode d'emploi : README.md
+
+Le registre est cherche, dans cet ordre : --perimeter, la variable PERIMETER,
+la remontee d'arborescence depuis le repertoire courant, puis
+~/.config/perimeter/perimeter.yml — ce dernier niveau sert l'usage « tour de
+controle », ou l'on travaille depuis un repertoire central sans registre.
 `
 
 func main() {
@@ -132,9 +137,13 @@ func resolveCorpus(path, regPath string) (*corpus.Corpus, *perimeter.Registry, e
 		return c, nil, err
 	}
 	if regPath == "" {
-		found, ok := perimeter.Find(".")
+		found, provenance, ok := perimeter.Resoudre(".", perimeter.DossierUtilisateur())
 		if !ok {
-			return nil, nil, fmt.Errorf("aucun %s trouve ici ni au-dessus — indiquer un chemin, ou ecrire un registre avec « perctl init »", perimeter.File)
+			if provenance == perimeter.EnvVar {
+				return nil, nil, fmt.Errorf("%s pointe %q, qui n'existe pas — corriger la variable, ou l'effacer pour laisser la recherche se faire",
+					perimeter.EnvVar, os.Getenv(perimeter.EnvVar))
+			}
+			return nil, nil, fmt.Errorf("%s", perimeter.Introuvable(".", perimeter.DossierUtilisateur()))
 		}
 		regPath = found
 	}
