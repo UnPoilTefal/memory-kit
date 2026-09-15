@@ -8,6 +8,7 @@ package lint
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -282,7 +283,13 @@ var hasWord = regexp.MustCompile(`[\p{L}\p{N}]`)
 func ruleWikilink(c *corpus.Corpus, _ Options, res *report.Result) {
 	known := c.ByName()
 	external := c.ExternalStems()
+	illisibles := stemsIllisibles(c)
 	seen := map[string]bool{}
+
+	// entrants compte, par note illisible, les liens qui la citent ; ordre
+	// preserve la sequence de decouverte pour un rapport stable.
+	entrants := map[string]int{}
+	var ordre []string
 
 	for _, n := range c.Notes {
 		if n.ParseErr != nil {
@@ -307,6 +314,21 @@ func ruleWikilink(c *corpus.Corpus, _ Options, res *report.Result) {
 				continue
 			}
 			seen[key] = true
+
+			// La cible existe, mais son frontmatter ne s'analyse pas : son
+			// name est vide, donc elle est absente de ByName. Le defaut
+			// appartient a cette note-la, pas a chacune de celles qui la
+			// citent — sinon une seule note en defaut produit autant
+			// d'alertes qu'elle a de liens entrants, et aucune ne designe
+			// la cause.
+			if rel, ok := illisibles[target]; ok {
+				if entrants[rel] == 0 {
+					ordre = append(ordre, rel)
+				}
+				entrants[rel]++
+				continue
+			}
+
 			res.Add(report.Finding{
 				Rule: "wikilink", Severity: report.Warn, File: n.Rel,
 				Message: fmt.Sprintf("[[%s]] n'a pas de cible", target),
@@ -314,6 +336,29 @@ func ruleWikilink(c *corpus.Corpus, _ Options, res *report.Result) {
 			})
 		}
 	}
+
+	for _, rel := range ordre {
+		res.Add(report.Finding{
+			Rule: "wikilink", Severity: report.Warn, File: rel,
+			Message: fmt.Sprintf("existe mais ne s'analyse pas : %d lien(s) entrant(s) ne se resolvent pas", entrants[rel]),
+			Hint:    "corriger le frontmatter de cette note resout ces liens d'un coup ; la cause est le constat parse ci-dessus",
+		})
+	}
+}
+
+// stemsIllisibles indexe par nom de fichier, extension retiree, les notes
+// dont le frontmatter ne s'analyse pas. Leur champ name est inaccessible,
+// donc le stem est la seule cle disponible — et la regle name-match garantit
+// que les deux coincident sur une note saine.
+func stemsIllisibles(c *corpus.Corpus) map[string]string {
+	m := map[string]string{}
+	for _, n := range c.Notes {
+		if n.ParseErr == nil {
+			continue
+		}
+		m[strings.TrimSuffix(filepath.Base(n.Rel), ".md")] = n.Rel
+	}
+	return m
 }
 
 func ignoredLink(c *corpus.Corpus, target string) bool {
