@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/UnPoilTefal/perimeter/internal/claim"
 	"github.com/UnPoilTefal/perimeter/internal/corpus"
 	"github.com/UnPoilTefal/perimeter/internal/lint"
 	"github.com/UnPoilTefal/perimeter/internal/perimeter"
@@ -39,6 +40,7 @@ const usage = `perctl — savoir si un agent peut agir sur un perimetre
   perctl perimeter [reg]   valide le registre des sources du perimetre
   perctl gate <evaluation> derive le verdict de readiness d'une specification
   perctl readiness         etat de sortie de demarrage, et regime qui en decoule
+  perctl propose [chemin]  propose une sonde pour les notes qui n'en portent pas
   perctl init   [chemin]   ecrit un .corpus.yml
   perctl schema            ecrit le JSON Schema sur la sortie standard
   perctl version
@@ -65,6 +67,8 @@ func main() {
 		err = cmdGate(os.Args[2:])
 	case "readiness":
 		err = cmdReadiness(os.Args[2:])
+	case "propose":
+		err = cmdPropose(os.Args[2:])
 	case "init":
 		err = cmdInit(os.Args[2:])
 	case "schema":
@@ -515,6 +519,73 @@ func cmdReadiness(args []string) error {
 // cmdInit ecrit le registre du perimetre. C'est le premier contact d'une
 // equipe avec l'outil : il pose les six roles, propose une brique pour chacun,
 // et ecrit des sondes qui fonctionnent — sinon « simple » reste un vœu.
+// cmdPropose examine les notes sans preuve et propose la sonde qui les
+// prouverait. Sans --write, il n'ecrit rien : c'est une proposition a relire,
+// jamais une ecriture. Avec, la sonde est inseree en commentaire — une note ne
+// devient jamais verifiable sans qu'un humain l'ait decommentee.
+func cmdPropose(args []string) error {
+	fs := flag.NewFlagSet("propose", flag.ExitOnError)
+	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
+	write := fs.Bool("write", false, "inserer les sondes proposees, en commentaire")
+	only := fs.String("confidence", "", "ne garder qu'un niveau : registre | structurel")
+	path := positional(args)
+	_ = fs.Parse(trimPositional(args))
+
+	c, reg, err := resolveCorpus(path, *regPath)
+	if err != nil {
+		return err
+	}
+	// Une commande qui modifie des fichiers doit dire lesquels et ou. Sans
+	// cela, un registre au chemin absolu fait ecrire ailleurs que la ou l'on
+	// croit etre — constate, et corrige ici.
+	fmt.Printf("corpus : %s\n", c.Root)
+	if reg != nil {
+		fmt.Printf("registre : %s\n", reg.Path)
+	}
+	fmt.Println()
+
+	res := claim.Propose(c, reg)
+
+	var kept []claim.Proposal
+	for _, p := range res.Proposals {
+		if *only == "" || string(p.Confidence) == *only {
+			kept = append(kept, p)
+		}
+	}
+
+	fmt.Printf("%d notes — %d portent deja une preuve, %d proposables, %d sans signal\n",
+		res.Total, res.DejaPreuve, len(res.Proposals), len(res.SansSignal))
+	fmt.Printf("couverture atteignable : %.0f %%\n", res.Coverage()*100)
+
+	var courant claim.Confidence
+	for _, p := range kept {
+		if p.Confidence != courant {
+			courant = p.Confidence
+			fmt.Printf("\n· confiance %s\n", courant)
+		}
+		fmt.Printf("    %-46s %-10s %s\n", p.Note, p.Kind.Name, p.Why)
+		if p.Cmd != "" {
+			fmt.Printf("      %s\n", strings.ReplaceAll(p.Cmd, "\n  ", "\n      "))
+			if p.Expect != "" {
+				fmt.Printf("      %s\n", p.Expect)
+			}
+		}
+	}
+
+	if !*write {
+		if len(kept) > 0 {
+			fmt.Printf("\nrien n'a ete ecrit — relancer avec --write pour inserer ces sondes en commentaire\n")
+		}
+		return nil
+	}
+	n, err := claim.Write(c, kept)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\n%d notes completees dans %s — les sondes sont en commentaire, a decommenter apres relecture\n", n, c.Root)
+	return nil
+}
+
 func cmdInit(args []string) error {
 	fs := flag.NewFlagSet("init", flag.ExitOnError)
 	auto := fs.Bool("non-interactive", false, "ecrire un gabarit commente sans poser de questions")

@@ -154,6 +154,41 @@ perctl index --fix     # les ajouter
 perctl index --sync    # régénérer les accroches depuis les descriptions
 ```
 
+### Proposer les sondes plutôt que les attendre
+
+Le mécanisme de preuve ne sert à rien tant qu'il faut écrire chaque sonde à la main. Sur le
+corpus de développement, **2 notes sur 101** en portaient une.
+
+```bash
+perctl propose            # ce qu'il écrirait
+perctl propose --write    # l'écrit, en commentaire
+```
+
+`propose` type chaque assertion à partir de **signaux structurels ancrés**, jamais du sens du
+texte, et propose la sonde correspondante :
+
+| Confiance | Signal | Sonde proposée |
+|---|---|---|
+| `registre` | la note cite une source déclarée — `produit#412` | `source: tickets`, `arg: "412"` |
+| `structurel` | chemin absolu, URL, hôte, version | `test -e …`, `curl -sfI …` |
+
+L'ancrage au registre est le bon : **ne pas deviner ce qu'est un dépôt, demander au registre.**
+Un motif générique (`mot/mot`) produit 80 % de faux positifs, et un endpoint dégénéré (`.`)
+donne une ancre qui matche tout — les deux mesurés, les deux écartés par le code.
+
+Chaque type porte sa **demi-vie** : un chemin se périme plus vite qu'une convention.
+
+**Deux règles de sûreté, chacune née d'une erreur constatée :**
+
+- Une sonde n'est **jamais** construite à partir d'une commande citée dans une note. On
+  n'exécute pas ce qu'on trouve écrit.
+- Les sondes sont écrites **en commentaire**. Une note ne devient vérifiable que lorsqu'un
+  humain a relu et décommenté — même discipline que pour la mémoire : une proposition d'agent
+  arrive en `proposed`, jamais en `canon`.
+
+`propose` annonce toujours **le corpus et le registre sur lesquels il agit**. Un registre au
+chemin absolu fait travailler ailleurs que là où l'on croit être.
+
 ---
 
 ## `perctl verify` — les faits

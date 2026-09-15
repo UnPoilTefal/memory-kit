@@ -52,6 +52,18 @@ jobs:
       - run: ./bin/perctl lint --perimeter examples/perimeter.yml --format github --strict
       # L'usage ad hoc, sur un repertoire hors de tout perimetre declare.
       - run: ./bin/perctl lint examples/corpus --strict
+      # « propose » ne doit jamais rien ecrire sans --write.
+      - name: Propose sans effet de bord
+        run: |
+          avant=$(git status --porcelain examples/ | wc -l)
+          ./bin/perctl propose --perimeter examples/perimeter.yml > /dev/null
+          apres=$(git status --porcelain examples/ | wc -l)
+          if [ "$avant" -ne "$apres" ]; then
+            echo "::error::perctl propose a modifie des fichiers sans --write"
+            exit 1
+          fi
+          echo "  ✓ aucun fichier modifie"
+
       # Le gabarit d'init doit passer la validation sans retouche.
       - name: Gabarit d'init
         run: |
