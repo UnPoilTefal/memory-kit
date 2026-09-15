@@ -428,6 +428,29 @@ Préférable à une commande écrite en dur dès qu'un périmètre est déclaré
 changement d'outil, la commande non. Changer de traqueur de tickets devient une ligne du
 registre au lieu d'une reprise de toutes les notes.
 
+### Un chemin et un registre se combinent
+
+Un chemin positionnel dit **quel corpus**, `--perimeter` dit **quelle politique**. Les deux ne
+s'excluent pas :
+
+```bash
+perctl lint                              # corpus et politique viennent du registre
+perctl lint <chemin> --perimeter <reg>   # ce corpus-la, avec cette politique-la
+perctl lint <chemin>                     # usage ad hoc : les defauts s'appliquent
+```
+
+⚠️ **Un registre seulement ambiant ne s'applique pas à un corpus désigné à la main.** Si
+`PERIMETER` est exporté dans le shell, analyser un répertoire quelconque au passage ne doit pas lui
+appliquer la politique d'un autre périmètre. L'outil le dit alors plutôt que de choisir en silence :
+
+```
+note : PERIMETER est definie, mais un chemin est donne —
+       la politique du registre n'est pas appliquee
+```
+
+L'écart est loin d'être cosmétique. Sur un corpus réel, `lint <chemin>` rendait **142**
+avertissements contre **24** avec la politique — mêmes notes, verdicts incomparables.
+
 ### La maturité du registre — au-delà de valide / invalide
 
 `perctl perimeter` rend deux choses distinctes, et il ne faut pas les confondre.

@@ -161,6 +161,19 @@ jobs:
             *"exit status"*) echo "::error::le code de sortie de git remonte brut : $sortie"; exit 1 ;;
           esac
 
+      # Un chemin et un --perimeter se combinent : le meme corpus doit rendre
+      # le meme verdict, qu'il soit designe par le registre ou par un chemin.
+      # Les accepter puis en ignorer un rendait « lint <chemin> » et « lint »
+      # divergents sur le meme corpus, sans rien dire.
+      - name: un chemin positionnel n'ecarte pas --perimeter
+        run: |
+          avec=$(./bin/perctl lint examples/corpus --perimeter examples/perimeter.yml 2>/dev/null | tail -1)
+          sans=$(./bin/perctl lint --perimeter examples/perimeter.yml 2>/dev/null | tail -1)
+          if [ "$avec" != "$sans" ]; then
+            echo "::error::verdicts divergents — avec chemin: $avec / sans: $sans"
+            exit 1
+          fi
+
       # Le registre doit etre adressable autrement que par --perimeter : une
       # session d'agent ou un job de CI exporte une variable plus facilement
       # qu'il ne passe un chemin a chaque commande.
