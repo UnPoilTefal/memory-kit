@@ -253,6 +253,13 @@ func ruleIndexDrift(c *corpus.Corpus, _ Options, res *report.Result) {
 	if !c.HasIndex {
 		return
 	}
+	// En regime authored, l'accroche est ecrite pour un lecteur humain :
+	// elle n'a aucune raison de reprendre la description, et la comparer
+	// produit un constat par entree — du bruit qui noie le reste.
+	if c.IndexHookAuthore() {
+		res.Stats["index_drift"] = 0
+		return
+	}
 	byRel := c.ByRel()
 	drift := 0
 	for _, e := range c.IndexEntries {

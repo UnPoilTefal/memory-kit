@@ -73,6 +73,7 @@ type CorpusPolicy struct {
 	Types                []string `yaml:"types"`
 	MaxBodyWords         int      `yaml:"max_body_words"`
 	RequireOwner         bool     `yaml:"require_owner"`
+	IndexHook            string   `yaml:"index_hook"`
 	VerifyTimeoutSeconds int      `yaml:"verify_timeout_seconds"`
 	Staleness            struct {
 		ReviewAfterDays int     `yaml:"review_after_days"`

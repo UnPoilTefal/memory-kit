@@ -1,6 +1,7 @@
 package perimeter
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -460,5 +461,30 @@ func TestUneSourceDUneInstanceNEstPasOrpheline(t *testing.T) {
 	}
 	if strings.Contains(issueText(reg.Check()), "aucun role") {
 		t.Error("aucune source ne doit etre vue comme non rattachee")
+	}
+}
+
+// index_hook n'accepte que deux regimes. Une faute de frappe qui passerait
+// pour « derived » silencerait index-drift sans que personne ne le voie : le
+// schema doit la refuser, pas lui donner un defaut.
+func TestIndexHookRefuseUneValeurInconnue(t *testing.T) {
+	gabarit := `memoire:  { adapter: files,  reliability: declared, probe: { cmd: "true" }, corpus: { index: MEMORY.md, index_hook: %s } }`
+
+	for _, bon := range []string{"derived", "authored"} {
+		body := strings.Replace(complet,
+			`memoire:  { adapter: files,  reliability: declared, probe: { cmd: "true" } }`,
+			fmt.Sprintf(gabarit, bon), 1)
+		if _, err := Load(write(t, body)); err != nil {
+			t.Errorf("index_hook: %s est un regime valide, refuse : %v", bon, err)
+		}
+	}
+
+	for _, mauvais := range []string{"redigee", "manual", "Derived", "true"} {
+		body := strings.Replace(complet,
+			`memoire:  { adapter: files,  reliability: declared, probe: { cmd: "true" } }`,
+			fmt.Sprintf(gabarit, mauvais), 1)
+		if _, err := Load(write(t, body)); err == nil {
+			t.Errorf("index_hook: %s n'est pas un regime connu et doit etre refuse", mauvais)
+		}
 	}
 }

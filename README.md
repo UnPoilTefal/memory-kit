@@ -120,7 +120,7 @@ Le schéma complet : [`schema/memory.schema.json`](schema/memory.schema.json)
 | `name-match` | erreur | `name` divergent du fichier : les liens pointent dans le vide |
 | `index-orphan` | erreur | **une note absente de l'index est écrite mais jamais lue** |
 | `index-dangling` | erreur | l'index cite une note supprimée |
-| `index-drift` | avert. | l'accroche d'index contredit la description qu'elle route |
+| `index-drift` | avert. | l'accroche d'index contredit la description qu'elle route *(régime `derived` seulement)* |
 | `wikilink` | avert. | lien cassé, y compris vers un corpus voisin |
 | `description` | avert. | une description qui ne permet pas de décider du rappel |
 | `atomicity` | avert. | une note trop large ne se périme jamais proprement |
@@ -128,6 +128,35 @@ Le schéma complet : [`schema/memory.schema.json`](schema/memory.schema.json)
 | `staleness` | avert. | une note dont l'échéance de relecture est passée |
 | `staleness-budget` | erreur | le corpus dérive plus vite qu'il n'est relu |
 | `secret` | erreur | la mémoire est rechargée à chaque session : c'est un vecteur de fuite |
+
+### Qui écrit l'accroche d'index — `policy.index_hook`
+
+L'index porte, pour chaque note, une **accroche** : la phrase après le tiret. Deux
+régimes, et le choix appartient à l'équipe.
+
+| | `derived` *(défaut)* | `authored` |
+|---|---|---|
+| L'accroche | reprend la description | est rédigée à la main |
+| `index-drift` | signale toute divergence | ne s'applique pas |
+| `index --sync` | régénère | **refuse** |
+| `index --fix` | ajoute les manquantes | ajoute les manquantes, à relire |
+
+La raison d'être des deux : **description et accroche servent deux lecteurs.** La
+description dit à l'agent s'il doit ouvrir la note ; l'accroche aide l'humain qui
+parcourt l'index à s'orienter. Les forcer égales optimise pour un seul des deux.
+
+En `derived`, l'accroche est de l'état dérivé et toute divergence est une dérive — le
+mode de panne réel est une accroche qui finit par **contredire** la note qu'elle route.
+En `authored`, elle est du contenu à part entière : la comparer produirait un
+avertissement par entrée, et ce bruit noie les constats utiles.
+
+⚠️ En `authored`, `index --sync` **refuse** au lieu de régénérer. Taire la règle sans
+désarmer la commande laisserait la configuration dire une chose et l'outil rester
+capable du contraire — un seul `--sync` écraserait toutes les accroches d'un coup.
+
+Rien dans un corpus ne permet de déduire le régime : c'est une intention, donc elle se
+déclare. Une valeur inconnue est **refusée** par le schéma, jamais rabattue sur un
+défaut — sinon une faute de frappe couperait la règle en silence.
 
 `index-orphan` est la règle qui justifie l'outil à elle seule. L'index est le routeur du
 rappel : une note qui n'y figure pas a été écrite, relue, commitée — et ne sera jamais
