@@ -77,6 +77,32 @@ jobs:
           ./bin/perctl index --sync --perimeter examples/perimeter.yml > /dev/null
           git checkout -- examples/
 
+      # Une note sans date doit bloquer par defaut, et retomber en simple
+      # avertissement quand le corpus le declare. Sans le premier, le trou se
+      # reforme ; sans le second, un corpus existant n'a aucune porte de sortie.
+      - name: une note sans date est une erreur, sauf declaration contraire
+        run: |
+          mkdir -p /tmp/sansdate
+          cat > /tmp/sansdate/MEMORY.md <<'MD'
+          # Index
+
+          - [Reference: sans date](reference-sans-date.md) — rien ne la rattache au temps
+          MD
+          cat > /tmp/sansdate/reference-sans-date.md <<'MD'
+          ---
+          name: reference-sans-date
+          description: "Un fait parfaitement enonce, mais que rien ne permet de faire vieillir"
+          metadata:
+            type: reference
+          ---
+
+          Un fait.
+          MD
+          if ./bin/perctl lint /tmp/sansdate; then
+            echo "::error::une note sans date aurait du etre une erreur"
+            exit 1
+          fi
+
       # « draft » juge un brouillon et n'ecrit jamais — ni le brouillon, ni le
       # corpus. C'est la contrainte dure du portillon : des propositions
       # relues, pas des ecritures.

@@ -92,6 +92,10 @@ const CorpusPolicyBloc = `    # Politique du corpus — lue par « perctl lint �
       index_hook: derived
       max_body_words: 400
       require_owner: false
+      # Une note sans date est hors de portee de toute peremption : par
+      # defaut c'est une erreur. Passer a false pour un corpus qui ne peut
+      # pas s'y plier tout de suite.
+      require_date: true
       staleness:
         review_after_days: 180
         max_stale_ratio: 0.15

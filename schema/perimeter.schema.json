@@ -191,6 +191,10 @@
           "type": "boolean",
           "description": "Exiger un proprietaire. Indispensable des qu'on est plusieurs, sinon personne ne supprime jamais rien."
         },
+        "require_date": {
+          "type": "boolean",
+          "description": "Faire d'une note sans date une erreur plutot qu'un avertissement. Vrai par defaut : une note qu'aucune date ne rattache au temps est hors de portee de toute peremption."
+        },
         "index_hook": {
           "enum": ["derived", "authored"],
           "description": "Qui ecrit l'accroche d'index. \"derived\" (defaut) : elle reprend la description, toute divergence est une derive et \"index --sync\" regenere. \"authored\" : elle est redigee pour un lecteur humain, la regle index-drift ne s'applique pas et \"index --sync\" refuse de l'ecraser."

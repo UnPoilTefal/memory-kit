@@ -451,10 +451,18 @@ func ruleStaleness(c *corpus.Corpus, opt Options, res *report.Result) {
 		}
 		due, ok := n.ReviewDue(budget)
 		if !ok {
+			// Une note qu'aucune date ne rattache au temps est hors de
+			// portee de toute peremption. Un avertissement ne l'a jamais
+			// fait corriger : sur un corpus reel, 18 % des notes etaient
+			// dans ce cas, et le signal se noyait dans le bruit.
+			severite := report.Warn
+			if c.Config.Policy.RequireDate {
+				severite = report.Error
+			}
 			res.Add(report.Finding{
-				Rule: "staleness", Severity: report.Warn, File: n.Rel,
+				Rule: "staleness", Severity: severite, File: n.Rel,
 				Message: "aucune date exploitable (ni modified, ni verified_at, ni review_after)",
-				Hint:    "sans date, la peremption d'une note est invisible",
+				Hint:    "sans date, la peremption d'une note est invisible — poser modified, ou declarer policy.require_date: false",
 			})
 			continue
 		}
