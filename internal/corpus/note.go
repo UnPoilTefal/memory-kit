@@ -103,6 +103,14 @@ func splitFrontmatter(raw []byte) (fm, body []byte, err error) {
 	return nil, nil, fmt.Errorf("frontmatter non clos : --- de fermeture manquant")
 }
 
+// ParseNote analyse une note depuis son contenu, sans passer par le disque.
+// Sert a comparer une note a son etat sous une reference git.
+func ParseNote(rel string, raw []byte) (*Note, error) {
+	n := &Note{Rel: rel, Base: filepath.Base(rel)}
+	fill(n, raw)
+	return n, nil
+}
+
 // LoadNote lit et analyse une note. Une erreur de parsing est portee par la
 // note elle-meme plutot que remontee, pour que le lint puisse rapporter
 // toutes les notes cassees d'un coup au lieu de s'arreter a la premiere.
@@ -113,11 +121,18 @@ func LoadNote(root, path string) (*Note, error) {
 	}
 	rel, _ := filepath.Rel(root, path)
 	n := &Note{Path: path, Rel: rel, Base: filepath.Base(path)}
+	fill(n, raw)
+	return n, nil
+}
 
+// fill analyse le contenu brut dans la note. Une erreur d'analyse est portee
+// par la note plutot que remontee, pour que le lint puisse rapporter toutes
+// les notes cassees d'un coup au lieu de s'arreter a la premiere.
+func fill(n *Note, raw []byte) {
 	fm, body, err := splitFrontmatter(raw)
 	if err != nil {
 		n.ParseErr = err
-		return n, nil
+		return
 	}
 	n.Body = strings.TrimSpace(string(body))
 	n.BodyWords = len(strings.Fields(n.Body))
@@ -125,11 +140,11 @@ func LoadNote(root, path string) (*Note, error) {
 	var doc yaml.Node
 	if err := yaml.Unmarshal(fm, &doc); err != nil {
 		n.ParseErr = fmt.Errorf("YAML invalide : %w", err)
-		return n, nil
+		return
 	}
 	if len(doc.Content) == 0 {
 		n.ParseErr = fmt.Errorf("frontmatter vide")
-		return n, nil
+		return
 	}
 	n.Root = doc.Content[0]
 
@@ -140,15 +155,13 @@ func LoadNote(root, path string) (*Note, error) {
 	}
 	if err := yaml.Unmarshal(fm, &shape); err != nil {
 		n.ParseErr = fmt.Errorf("frontmatter non conforme : %w", err)
-		return n, nil
+		return
 	}
 	n.Name, n.Desc, n.Metadata = shape.Name, shape.Desc, shape.Meta
 
 	if err := yaml.Unmarshal(fm, &n.Any); err != nil {
 		n.ParseErr = fmt.Errorf("frontmatter non convertible : %w", err)
-		return n, nil
 	}
-	return n, nil
 }
 
 // ReviewDue rend la date a laquelle la note doit etre relue, et si elle est

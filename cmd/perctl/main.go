@@ -14,14 +14,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/UnPoilTefal/perimeter/internal/ciguard"
 	"github.com/UnPoilTefal/perimeter/internal/claim"
 	"github.com/UnPoilTefal/perimeter/internal/corpus"
 	"github.com/UnPoilTefal/perimeter/internal/lint"
 	"github.com/UnPoilTefal/perimeter/internal/perimeter"
+	"github.com/UnPoilTefal/perimeter/internal/probediff"
 	"github.com/UnPoilTefal/perimeter/internal/readiness"
 	"github.com/UnPoilTefal/perimeter/internal/report"
 	"github.com/UnPoilTefal/perimeter/internal/verify"
@@ -179,6 +182,8 @@ func cmdVerify(args []string) error {
 	allow := fs.Bool("allow-exec", false, "autorise l'execution des commandes declarees (obligatoire)")
 	write := fs.Bool("write", false, "inscrit verified_at et verify_status dans les notes")
 	only := fs.String("only", "", "ne verifie que les notes dont le nom contient cette chaine")
+	untrusted := fs.Bool("allow-exec-untrusted", false, "executer meme dans un contexte ou le contenu vient de l'exterieur")
+	diffRef := fs.String("diff-probes", "", "lister les preuves qui ont change depuis cette reference git, sans rien executer")
 	timeout := fs.Duration("timeout", 0, "delai par commande (defaut : celui du corpus)")
 	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
 	probes := fs.Bool("probe-sources", false, "rejoue aussi la sonde de chaque source declaree")
@@ -189,6 +194,21 @@ func cmdVerify(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	if *diffRef != "" {
+		return listerPreuvesModifiees(c, *diffRef)
+	}
+
+	// Les preuves sont du shell declare dans des fichiers markdown. Les jouer
+	// sur une contribution venue de l'exterieur revient a executer du code
+	// arbitraire. La regle existait dans la documentation ; elle est ici.
+	if *allow && !*untrusted {
+		if v := ciguard.AssessDefault(); !v.Trusted {
+			fmt.Fprintf(os.Stderr, "\n  contexte : %s\n  %s\n\n  Les preuves sont du code declare dans des fichiers markdown : les jouer\n  ici executerait du contenu venu de l'exterieur. Passer outre demande\n  --allow-exec-untrusted, et de savoir pourquoi.\n\n", v.Context, v.Reason) //nolint:errcheck // sortie terminal
+			return fmt.Errorf("execution refusee dans ce contexte")
+		}
+	}
+
 	res, outcomes, err := verify.Run(c, verify.Options{
 		AllowExec: *allow, Write: *write, Only: *only, Timeout: *timeout,
 		Registry: reg, ProbeSources: *probes,
@@ -523,6 +543,68 @@ func cmdReadiness(args []string) error {
 // prouverait. Sans --write, il n'ecrit rien : c'est une proposition a relire,
 // jamais une ecriture. Avec, la sonde est inseree en commentaire — une note ne
 // devient jamais verifiable sans qu'un humain l'ait decommentee.
+// listerPreuvesModifiees rend les notes dont le bloc de preuve a bouge depuis
+// une reference. Rien n'est execute : c'est fait pour tourner sur une pull
+// request, la ou l'execution est justement interdite.
+func listerPreuvesModifiees(c *corpus.Corpus, ref string) error {
+	racine, err := depotDe(c.Root)
+	if err != nil {
+		return err
+	}
+	lire := func(rel string) ([]byte, error) {
+		chemin, err := filepath.Rel(racine, filepath.Join(c.Root, rel))
+		if err != nil {
+			return nil, err
+		}
+		cmd := exec.Command("git", "-C", racine, "show", ref+":"+chemin)
+		out, err := cmd.Output()
+		if err != nil {
+			// git echoue aussi bien pour un fichier absent que pour une
+			// reference inconnue : on distingue en interrogeant la reference.
+			if verifierRef(racine, ref) != nil {
+				return nil, fmt.Errorf("reference %q inconnue dans %s", ref, racine)
+			}
+			return nil, os.ErrNotExist
+		}
+		return out, nil
+	}
+
+	changes, err := probediff.Changed(c, lire)
+	if err != nil {
+		return err
+	}
+	if len(changes) == 0 {
+		fmt.Printf("aucune preuve modifiee depuis %s\n", ref)
+		return nil
+	}
+	fmt.Printf("%d note(s) dont les preuves ont change depuis %s :\n\n", len(changes), ref)
+	total := 0
+	for _, ch := range changes {
+		total += ch.Count()
+		fmt.Printf("  %s — %s\n", ch.Note, ch.Resume())
+		for _, a := range ch.Ajoutees {
+			fmt.Printf("    + %s\n", a)
+		}
+		for _, r := range ch.Retirees {
+			fmt.Printf("    - %s\n", r)
+		}
+	}
+	fmt.Printf("\n%d preuve(s) touchee(s) — c'est la seule portion du diff qui execute du code.\n", total)
+	return nil
+}
+
+func depotDe(dir string) (string, error) {
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("%s n'est pas dans un depot git : --diff-probes compare a une reference git", dir)
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+func verifierRef(racine, ref string) error {
+	return exec.Command("git", "-C", racine, "rev-parse", "--verify", "--quiet", ref+"^{commit}").Run()
+}
+
 func cmdPropose(args []string) error {
 	fs := flag.NewFlagSet("propose", flag.ExitOnError)
 	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
