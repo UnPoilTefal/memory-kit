@@ -54,6 +54,10 @@ const usage = `perctl — savoir si un agent peut agir sur un perimetre
   perctl schema            ecrit le JSON Schema sur la sortie standard
   perctl version
 
+Un chemin designe le corpus, un --perimeter la politique : les deux se
+combinent. Un registre seulement ambiant (PERIMETER, ou trouve en remontant)
+ne s'applique pas a un corpus designe par un chemin.
+
 Le chemin vaut « . » par defaut. Detail des regles et mode d'emploi : README.md
 
 Le registre est cherche, dans cet ordre : --perimeter, la variable PERIMETER,
@@ -133,8 +137,32 @@ func positional(args []string) string {
 // hoc, sur un repertoire qui n'appartient a aucun perimetre declare.
 func resolveCorpus(path, regPath string) (*corpus.Corpus, *perimeter.Registry, error) {
 	if path != "" {
-		c, err := corpus.Load(path)
-		return c, nil, err
+		// Un chemin dit *quel corpus*, un --perimeter explicite dit *quelle
+		// politique*. Les deux ne s'excluent pas — les accepter puis en
+		// ignorer un rendait « --probe-sources » inoperant sans le dire, et
+		// faisait rendre a « lint <chemin> » un verdict different de
+		// « lint » sur le meme corpus.
+		if regPath == "" {
+			// Un registre seulement ambiant — PERIMETER, ou trouve en
+			// remontant — ne s'applique pas a un corpus designe a la main :
+			// il ferait piloter n'importe quel repertoire analyse au passage
+			// par la politique d'un autre perimetre.
+			if env := os.Getenv(perimeter.EnvVar); env != "" {
+				fmt.Fprintf(os.Stderr, "note : %s est definie, mais un chemin est donne — la politique du registre n'est pas appliquee\n      la demander explicitement : --perimeter %s\n\n", perimeter.EnvVar, env) //nolint:errcheck // sortie terminal
+			}
+			c, err := corpus.Load(path)
+			return c, nil, err
+		}
+		reg, err := perimeter.Load(regPath)
+		if err != nil {
+			return nil, nil, err
+		}
+		_, _, policy, err := reg.CorpusSource()
+		if err != nil {
+			return nil, nil, err
+		}
+		c, err := corpus.LoadWith(path, corpus.ConfigFromPolicy(policy))
+		return c, reg, err
 	}
 	if regPath == "" {
 		found, provenance, ok := perimeter.Resoudre(".", perimeter.DossierUtilisateur())
