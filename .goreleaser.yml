@@ -1,15 +1,15 @@
 version: 2
 
-project_name: memory-kit
+project_name: perimeter
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: memctl
-    main: ./cmd/memctl
-    binary: memctl
+  - id: perctl
+    main: ./cmd/perctl
+    binary: perctl
     env:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
@@ -51,8 +51,8 @@ changelog:
 # genere porte les artefacts macOS et Linux ; en CI, l'image de conteneur
 # reste le chemin recommande.
 homebrew_casks:
-  - name: memory-kit
-    binaries: [memctl]
+  - name: perimeter
+    binaries: [perctl]
     repository:
       owner: UnPoilTefal
       name: homebrew-tap
@@ -61,7 +61,7 @@ homebrew_casks:
       # regle « pull_request » a ete retiree du ruleset — elle rendait le
       # depot impossible a ecrire par l'un comme par l'autre chemin. La
       # protection contre la suppression et le force-push, elle, reste.
-    homepage: "https://github.com/UnPoilTefal/memory-kit"
+    homepage: "https://github.com/UnPoilTefal/perimeter"
     description: "Outillage d'un corpus de memoire agent : lint structurel, preuves rejouees, porte de readiness"
     license: "MIT"
     hooks:
@@ -70,16 +70,16 @@ homebrew_casks:
         # le rend inexecutable sans intervention de l'utilisateur.
         install: |
           if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/memctl"]
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/perctl"]
           end
 
 # ─── Image de conteneur ──────────────────────────────────────────────────────
-# memory-kit est d'abord un outil de CI : une image evite un setup-go dans
+# perimeter est d'abord un outil de CI : une image evite un setup-go dans
 # chaque depot qui l'utilise, et couvre Linux la ou le cask ne va pas.
 dockers_v2:
-  - id: memctl
+  - id: perctl
     images:
-      - "ghcr.io/unpoiltefal/memory-kit"
+      - "ghcr.io/unpoiltefal/perimeter"
     tags:
       - "{{ .Version }}"
       - "latest"
@@ -88,7 +88,7 @@ dockers_v2:
       - linux/arm64
     dockerfile: Dockerfile
     labels:
-      org.opencontainers.image.source: "https://github.com/UnPoilTefal/memory-kit"
+      org.opencontainers.image.source: "https://github.com/UnPoilTefal/perimeter"
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.licenses: "MIT"
       org.opencontainers.image.description: "Outillage d'un corpus de memoire agent"

@@ -15,5 +15,5 @@ n'existe plus du point de vue de l'agent.
 Rien ne le signale sans outillage : la note est bien la, son contenu est correct, le
 depot est propre. C'est le mode de perte le plus silencieux d'un corpus de memoire.
 
-**Comment l'appliquer** : `memctl lint` traite ce cas en erreur, et `memctl index --fix`
+**Comment l'appliquer** : `perctl lint` traite ce cas en erreur, et `perctl index --fix`
 ajoute les entrees manquantes. Voir aussi [[feedback-un-fait-par-note]].

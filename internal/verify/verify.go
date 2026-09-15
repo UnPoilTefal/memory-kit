@@ -22,9 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/UnPoilTefal/memory-kit/internal/corpus"
-	"github.com/UnPoilTefal/memory-kit/internal/perimeter"
-	"github.com/UnPoilTefal/memory-kit/internal/report"
+	"github.com/UnPoilTefal/perimeter/internal/corpus"
+	"github.com/UnPoilTefal/perimeter/internal/perimeter"
+	"github.com/UnPoilTefal/perimeter/internal/report"
 	"gopkg.in/yaml.v3"
 )
 

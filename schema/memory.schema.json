@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/UnPoilTefal/memory-kit/schema/memory.schema.json",
+  "$id": "https://github.com/UnPoilTefal/perimeter/schema/memory.schema.json",
   "title": "Memory note",
   "description": "Frontmatter d'une note de mémoire atomique. Un fichier = un fait.",
   "type": "object",
@@ -128,7 +128,7 @@
         },
         "verified_at": {
           "type": "string",
-          "description": "Horodatage du dernier passage de memctl verify. Ecrit par l'outil, pas a la main.",
+          "description": "Horodatage du dernier passage de perctl verify. Ecrit par l'outil, pas a la main.",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}"
         },
         "verify_status": {

@@ -1,4 +1,4 @@
-BINARY  := memctl
+BINARY  := perctl
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
@@ -7,11 +7,11 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 help: ## Afficher cette aide
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
 
-build: ## Compiler memctl dans ./bin
-	@mkdir -p bin && go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/memctl
+build: ## Compiler perctl dans ./bin
+	@mkdir -p bin && go build -ldflags "$(LDFLAGS)" -o bin/$(BINARY) ./cmd/perctl
 
-install: ## Installer memctl dans le GOPATH
-	go install -ldflags "$(LDFLAGS)" ./cmd/memctl
+install: ## Installer perctl dans le GOPATH
+	go install -ldflags "$(LDFLAGS)" ./cmd/perctl
 
 test: ## Lancer les tests
 	go test -race ./...

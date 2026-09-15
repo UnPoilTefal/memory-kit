@@ -1,5 +1,10 @@
-// memctl outille un corpus de memoire agent : il en verifie la structure
-// (lint) et rejoue les preuves attachees aux faits (verify).
+// perctl outille un perimetre : l'ensemble de ce qu'un agent doit connaitre
+// pour agir sans se tromper de premisse.
+//
+// Il verifie la structure du corpus de memoire (lint), rejoue les preuves
+// attachees aux faits et aux sources (verify), valide le registre des briques
+// qui servent le perimetre (perimeter), et derive le verdict de readiness
+// d'une specification (gate).
 package main
 
 import (
@@ -11,30 +16,30 @@ import (
 	"strings"
 	"time"
 
-	"github.com/UnPoilTefal/memory-kit/internal/corpus"
-	"github.com/UnPoilTefal/memory-kit/internal/lint"
-	"github.com/UnPoilTefal/memory-kit/internal/perimeter"
-	"github.com/UnPoilTefal/memory-kit/internal/readiness"
-	"github.com/UnPoilTefal/memory-kit/internal/report"
-	"github.com/UnPoilTefal/memory-kit/internal/verify"
-	"github.com/UnPoilTefal/memory-kit/schema"
+	"github.com/UnPoilTefal/perimeter/internal/corpus"
+	"github.com/UnPoilTefal/perimeter/internal/lint"
+	"github.com/UnPoilTefal/perimeter/internal/perimeter"
+	"github.com/UnPoilTefal/perimeter/internal/readiness"
+	"github.com/UnPoilTefal/perimeter/internal/report"
+	"github.com/UnPoilTefal/perimeter/internal/verify"
+	"github.com/UnPoilTefal/perimeter/schema"
 	"golang.org/x/term"
 )
 
 // version est renseignee au build (-ldflags "-X main.version=…").
 var version = "dev"
 
-const usage = `memctl — outillage d'un corpus de memoire agent
+const usage = `perctl — savoir si un agent peut agir sur un perimetre
 
-  memctl lint   [chemin]   verifie la structure du corpus
-  memctl verify [chemin]   rejoue les preuves attachees aux faits
-  memctl index  [chemin]   compare l'index au corpus (--fix pour completer)
-  memctl perimeter [reg]   valide le registre des sources du perimetre
-  memctl gate <evaluation> derive le verdict de readiness d'une specification
-  memctl readiness         etat de sortie de demarrage, et regime qui en decoule
-  memctl init   [chemin]   ecrit un .memory-kit.yml
-  memctl schema            ecrit le JSON Schema sur la sortie standard
-  memctl version
+  perctl lint   [chemin]   verifie la structure du corpus
+  perctl verify [chemin]   rejoue les preuves attachees aux faits
+  perctl index  [chemin]   compare l'index au corpus (--fix pour completer)
+  perctl perimeter [reg]   valide le registre des sources du perimetre
+  perctl gate <evaluation> derive le verdict de readiness d'une specification
+  perctl readiness         etat de sortie de demarrage, et regime qui en decoule
+  perctl init   [chemin]   ecrit un .corpus.yml
+  perctl schema            ecrit le JSON Schema sur la sortie standard
+  perctl version
 
 Le chemin vaut « . » par defaut. Detail des regles et mode d'emploi : README.md
 `
@@ -63,7 +68,7 @@ func main() {
 	case "schema":
 		_, err = os.Stdout.Write(schema.Memory)
 	case "version":
-		fmt.Printf("memctl %s\n", version)
+		fmt.Printf("perctl %s\n", version)
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 	default:
@@ -71,7 +76,7 @@ func main() {
 		os.Exit(2)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "memctl: %v\n", err)
+		fmt.Fprintf(os.Stderr, "perctl: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -286,7 +291,7 @@ func cmdPerimeter(args []string) error {
 
 	if len(issues) == 0 {
 		fmt.Println("\n✓ registre coherent : chaque role est pourvu et chaque source sondable")
-		fmt.Println("  la sonde elle-meme se rejoue avec : memctl verify <corpus> --perimeter " + root + " --probe-sources --allow-exec")
+		fmt.Println("  la sonde elle-meme se rejoue avec : perctl verify <corpus> --perimeter " + root + " --probe-sources --allow-exec")
 		return nil
 	}
 	fmt.Printf("\n%d constats :\n", len(issues))
@@ -389,7 +394,7 @@ func preconditions(regPath, corpusPath string, a *readiness.Assessment) ([]readi
 			pre = append(pre, readiness.Precondition{
 				Code:    "perimetre",
 				Message: fmt.Sprintf("%d constat(s) sur le registre : le perimetre n'est pas entierement decrit", len(issues)),
-				Hint:    "memctl perimeter " + regPath,
+				Hint:    "perctl perimeter " + regPath,
 			})
 		}
 	}
@@ -483,7 +488,7 @@ func cmdInit(args []string) error {
 	return nil
 }
 
-const defaultConfigYAML = `# Configuration d'un corpus de memoire — https://github.com/UnPoilTefal/memory-kit
+const defaultConfigYAML = `# Configuration d'un corpus de memoire — https://github.com/UnPoilTefal/perimeter
 version: 1
 
 corpus:

@@ -14,5 +14,5 @@ dedoublonner contre une autre note qui n'en recouvre qu'une partie. Elle devient
 intouchable, et sa partie fausse survit indefiniment.
 
 **Comment l'appliquer.** Au moment d'ecrire, si la description demande deux phrases, c'est
-qu'il y a deux notes. `memctl lint` avertit au-dela du budget de mots configure, mais le
+qu'il y a deux notes. `perctl lint` avertit au-dela du budget de mots configure, mais le
 budget n'est qu'un filet : la vraie regle est celle de la description.

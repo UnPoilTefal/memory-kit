@@ -1,15 +1,20 @@
-# memory-kit
+# perimeter
 
-Outillage pour construire et **maintenir** une mémoire d'agent IA sur un périmètre —
-un homelab, une équipe, un produit.
+Savoir si un agent peut agir — sur un homelab, une équipe, un produit.
 
-La mémoire d'un agent pourrit par défaut, et elle pourrit en silence. `memory-kit`
-part du principe qu'un corpus de mémoire doit être traité comme du code : schéma,
-CI, revue, et surtout **des faits qui portent leur propre preuve**.
+Un **périmètre**, c'est l'ensemble de ce qu'un agent doit connaître pour travailler sans se
+tromper de prémisse : une mémoire de ce qui n'est pas re-dérivable, un registre des briques qui
+font autorité, et une porte qui décide si une spécification est prête.
+
+Ce qu'un agent tient pour acquis pourrit par défaut, et pourrit en silence. `perimeter` traite
+cette connaissance comme du code : schéma, CI, revue, et surtout **des faits qui portent leur
+propre preuve**.
 
 ```
-memctl lint    # la structure tient-elle ?
-memctl verify  # les faits sont-ils encore vrais ?
+perctl lint       # la structure du corpus tient-elle ?
+perctl verify     # les faits et les sources sont-ils encore vrais ?
+perctl perimeter  # chaque rôle est-il pourvu et sondable ?
+perctl gate       # cette spécification est-elle prête ?
 ```
 
 ---
@@ -48,20 +53,20 @@ Les confondre dans un wiki unique est le mode d'échec le plus courant.
 ## Installation
 
 ```bash
-brew install UnPoilTefal/tap/memory-kit
+brew install UnPoilTefal/tap/perimeter
 ```
 
 <details>
 <summary>Autres canaux</summary>
 
 ```bash
-# Binaires : https://github.com/UnPoilTefal/memory-kit/releases
+# Binaires : https://github.com/UnPoilTefal/perimeter/releases
 
 # Depuis les sources (suppose une chaîne Go)
-go install github.com/UnPoilTefal/memory-kit/cmd/memctl@latest
+go install github.com/UnPoilTefal/perimeter/cmd/perctl@latest
 
 # En CI, sans installer Go
-docker run --rm -v "$PWD:/w" -w /w ghcr.io/unpoiltefal/memory-kit:latest lint memory/
+docker run --rm -v "$PWD:/w" -w /w ghcr.io/unpoiltefal/perimeter:latest lint memory/
 ```
 
 </details>
@@ -70,8 +75,8 @@ docker run --rm -v "$PWD:/w" -w /w ghcr.io/unpoiltefal/memory-kit:latest lint me
 
 ```bash
 cd <votre corpus>
-memctl init      # écrit .memory-kit.yml
-memctl lint      # premier état des lieux
+perctl init      # écrit .corpus.yml
+perctl lint      # premier état des lieux
 ```
 
 Un corpus est un répertoire de notes markdown à frontmatter YAML, plus un index qui
@@ -102,11 +107,11 @@ et lie les notes voisines avec [[reference-autre-note]].
 ```
 
 Le schéma complet : [`schema/memory.schema.json`](schema/memory.schema.json)
-(`memctl schema` l'écrit sur la sortie standard, pour votre éditeur).
+(`perctl schema` l'écrit sur la sortie standard, pour votre éditeur).
 
 ---
 
-## `memctl lint` — la structure
+## `perctl lint` — la structure
 
 | Règle | Sévérité | Ce qu'elle empêche |
 |---|---|---|
@@ -127,14 +132,14 @@ Le schéma complet : [`schema/memory.schema.json`](schema/memory.schema.json)
 `index-orphan` est la règle qui justifie l'outil à elle seule. L'index est le routeur du
 rappel : une note qui n'y figure pas a été écrite, relue, commitée — et ne sera jamais
 lue par l'agent. Rien ne le signale sans outillage. Sur le corpus qui a servi à
-développer `memory-kit`, 11 notes sur 98 étaient dans ce cas.
+développer `perimeter`, 11 notes sur 98 étaient dans ce cas.
 
 ```bash
-memctl lint                      # sortie terminal
-memctl lint --format github      # annotations GitHub Actions
-memctl lint --format json        # pour un agent
-memctl lint --strict             # les avertissements font échouer
-memctl lint --disable atomicity,staleness
+perctl lint                      # sortie terminal
+perctl lint --format github      # annotations GitHub Actions
+perctl lint --format json        # pour un agent
+perctl lint --strict             # les avertissements font échouer
+perctl lint --disable atomicity,staleness
 ```
 
 ### L'index est de l'état dérivé
@@ -144,14 +149,14 @@ maintenue à la main en parallèle, elle finit par annoncer autre chose que ce q
 dit — et le rappel se fait sur une information fausse.
 
 ```bash
-memctl index           # quelles notes manquent à l'index
-memctl index --fix     # les ajouter
-memctl index --sync    # régénérer les accroches depuis les descriptions
+perctl index           # quelles notes manquent à l'index
+perctl index --fix     # les ajouter
+perctl index --sync    # régénérer les accroches depuis les descriptions
 ```
 
 ---
 
-## `memctl verify` — les faits
+## `perctl verify` — les faits
 
 C'est la boucle qui sépare un corpus de mémoire d'un wiki. Un fait qui porte une commande
 de vérification cesse d'être une affirmation datée : il devient une assertion testable.
@@ -165,9 +170,9 @@ metadata:
 ```
 
 ```bash
-memctl verify --allow-exec           # rejoue les preuves
-memctl verify --allow-exec --write   # inscrit verified_at et verify_status
-memctl verify --allow-exec --only authentik
+perctl verify --allow-exec           # rejoue les preuves
+perctl verify --allow-exec --write   # inscrit verified_at et verify_status
+perctl verify --allow-exec --only authentik
 ```
 
 Une preuve en échec **ne supprime pas la note** : elle la signale. C'est un humain qui
@@ -189,7 +194,7 @@ c'est ce qui rend la preuve exécutable — et c'est une surface d'attaque.
   sur une pull request venant d'un fork**.
 - N'écrivez que des commandes en lecture seule et idempotentes.
 
-`memctl lint` ne lance jamais rien : la CI de pull request peut l'utiliser sans réserve.
+`perctl lint` ne lance jamais rien : la CI de pull request peut l'utiliser sans réserve.
 
 ---
 
@@ -225,7 +230,7 @@ sources:
 ```
 
 ```bash
-memctl perimeter perimeter.yml   # chaque rôle est-il pourvu, chaque source sondable ?
+perctl perimeter perimeter.yml   # chaque rôle est-il pourvu, chaque source sondable ?
 ```
 
 ### Les six rôles ne sont pas configurables
@@ -242,7 +247,7 @@ par affirmer sereinement qu'aucun ticket ne contredit — parce que son jeton a 
 semaines plus tôt.
 
 ```bash
-memctl verify <corpus> --perimeter perimeter.yml --probe-sources --allow-exec
+perctl verify <corpus> --perimeter perimeter.yml --probe-sources --allow-exec
 ```
 
 La vérification porte alors sur **les faits, les sources, et le registre**.
@@ -274,8 +279,8 @@ qu'on cherche à supprimer.
 
 ### Compatibilité
 
-Un corpus sans registre garde **exactement** son comportement : `memctl lint` et
-`memctl verify` fonctionnent comme avant. Le registre est additif.
+Un corpus sans registre garde **exactement** son comportement : `perctl lint` et
+`perctl verify` fonctionnent comme avant. Le registre est additif.
 
 Une preuve qui renvoie à une source alors qu'aucun registre n'est chargé **échoue nommément**
 plutôt que d'être ignorée — une preuve non jouée ne prouve rien, et la taire donnerait un
@@ -296,7 +301,7 @@ même artefact sert deux fois : **porte** avant de produire, **critère d'accept
 
 ### Le partage du travail
 
-`memctl` ne juge pas si une spécification est comprise — c'est un binaire, il ne sait pas lire.
+`perctl` ne juge pas si une spécification est comprise — c'est un binaire, il ne sait pas lire.
 Il fournit **le cadre et le registre des passages** ; l'agent fournit le jugement. C'est la même
 division que pour les preuves : quelqu'un écrit la sonde, l'outil la rejoue.
 
@@ -327,7 +332,7 @@ facts:
 ```
 
 ```bash
-memctl gate evaluation.yml --perimeter perimeter.yml --corpus memory/
+perctl gate evaluation.yml --perimeter perimeter.yml --corpus memory/
 ```
 
 ### Trois classifications, trois issues
@@ -362,7 +367,7 @@ Chaque passage est consigné dans un journal **en ajout seul** — on ne réécr
 verdicts, sinon la mesure de maturité devient déclarative et ne vaut plus rien.
 
 ```bash
-memctl readiness
+perctl readiness
 ```
 
 Le démarrage prend fin quand, sur une fenêtre de passages consécutifs, **plus aucune escalade ne
@@ -406,8 +411,8 @@ l'index.
 
 | Quand | Quoi |
 |---|---|
-| À chaque PR | `memctl lint --format github` |
-| Chaque nuit | `memctl verify --allow-exec --write`, PR d'écart si échec |
+| À chaque PR | `perctl lint --format github` |
+| Chaque nuit | `perctl verify --allow-exec --write`, PR d'écart si échec |
 | Chaque mois | relire les `project` — c'est le registre qui pourrit |
 | Chaque trimestre | purger ce qui n'a jamais été rappelé |
 
@@ -454,7 +459,7 @@ inter-corpus** : un renommage côté wiki casse le lien, et le lint le dit.
 
 ## Standards
 
-`memory-kit` ne réinvente rien de ce qui existe déjà :
+`perimeter` ne réinvente rien de ce qui existe déjà :
 
 - [`AGENTS.md`](https://agents.md) pour les directives — la mémoire ne remplace pas les instructions.
 - [Agent Skills](https://code.claude.com/docs/en/skills) (`SKILL.md`) pour le procédural — une procédure s'exécute, elle ne se mémorise pas.

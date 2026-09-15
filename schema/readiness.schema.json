@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/UnPoilTefal/memory-kit/schema/readiness.schema.json",
+  "$id": "https://github.com/UnPoilTefal/perimeter/schema/readiness.schema.json",
   "title": "Readiness assessment",
   "description": "Evaluation de readiness d'une specification. L'auteur consigne les tests d'acceptation qu'il a su ecrire et les carences qu'il a rencontrees ; le verdict est derive, jamais declare.",
   "type": "object",

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/UnPoilTefal/memory-kit/internal/corpus"
-	"github.com/UnPoilTefal/memory-kit/internal/report"
-	"github.com/UnPoilTefal/memory-kit/schema"
+	"github.com/UnPoilTefal/perimeter/internal/corpus"
+	"github.com/UnPoilTefal/perimeter/internal/report"
+	"github.com/UnPoilTefal/perimeter/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"
@@ -247,7 +247,7 @@ func ruleIndexDangling(c *corpus.Corpus, _ Options, res *report.Result) {
 // ruleIndexDrift compare l'accroche portee par l'index a la description de la
 // note. L'accroche est de l'etat derive : quand elle diverge, le routeur
 // annonce autre chose que ce que la note dit, et le rappel se fait sur une
-// information fausse. « memctl index --sync » regenere.
+// information fausse. « perctl index --sync » regenere.
 func ruleIndexDrift(c *corpus.Corpus, _ Options, res *report.Result) {
 	if !c.HasIndex {
 		return
@@ -266,7 +266,7 @@ func ruleIndexDrift(c *corpus.Corpus, _ Options, res *report.Result) {
 		res.Add(report.Finding{
 			Rule: "index-drift", Severity: report.Warn, File: c.Config.Corpus.Index,
 			Message: fmt.Sprintf("l.%d %s : l'accroche ne reprend pas la description", e.Line, e.Target),
-			Hint:    "l'accroche d'index est derivee de la description : regenerer avec « memctl index --sync »",
+			Hint:    "l'accroche d'index est derivee de la description : regenerer avec « perctl index --sync »",
 		})
 	}
 	res.Stats["index_drift"] = drift

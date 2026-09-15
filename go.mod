@@ -1,4 +1,4 @@
-module github.com/UnPoilTefal/memory-kit
+module github.com/UnPoilTefal/perimeter
 
 go 1.27.1
 
