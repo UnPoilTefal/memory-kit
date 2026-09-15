@@ -61,7 +61,7 @@ type Note struct {
 	Desc     string `yaml:"description"`
 	Metadata Metadata
 
-	Body     string
+	Body      string
 	BodyWords int
 
 	// Root est l'arbre YAML du frontmatter, conserve pour une reecriture

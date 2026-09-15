@@ -8,9 +8,11 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,6 +93,46 @@ func fail(code int) error {
 	return nil
 }
 
+// positional rend le chemin donne en argument, ou la chaine vide. La
+// distinction compte : sans argument, on resout le corpus depuis le registre ;
+// avec, on analyse le repertoire pointe tel quel.
+func positional(args []string) string {
+	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
+		return args[0]
+	}
+	return ""
+}
+
+// resolveCorpus rend le corpus a analyser.
+//
+// Sans chemin explicite, la politique vient du registre de perimetre — c'est
+// le mode normal, et c'est ce qui permet a une equipe de n'ecrire qu'un seul
+// fichier. Avec un chemin, on retombe sur les valeurs par defaut : usage ad
+// hoc, sur un repertoire qui n'appartient a aucun perimetre declare.
+func resolveCorpus(path, regPath string) (*corpus.Corpus, *perimeter.Registry, error) {
+	if path != "" {
+		c, err := corpus.Load(path)
+		return c, nil, err
+	}
+	if regPath == "" {
+		found, ok := perimeter.Find(".")
+		if !ok {
+			return nil, nil, fmt.Errorf("aucun %s trouve ici ni au-dessus — indiquer un chemin, ou ecrire un registre avec « perctl init »", perimeter.File)
+		}
+		regPath = found
+	}
+	reg, err := perimeter.Load(regPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	_, root, policy, err := reg.CorpusSource()
+	if err != nil {
+		return nil, nil, err
+	}
+	c, err := corpus.LoadWith(root, corpus.ConfigFromPolicy(policy))
+	return c, reg, err
+}
+
 func target(args []string) string {
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		return args[0]
@@ -109,10 +151,11 @@ func cmdLint(args []string) error {
 	format := fs.String("format", "human", "human | json | github")
 	strict := fs.Bool("strict", false, "traite les avertissements comme des erreurs")
 	disable := fs.String("disable", "", "regles a desactiver, separees par des virgules")
-	root := target(args)
+	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
+	path := positional(args)
 	_ = fs.Parse(trimPositional(args))
 
-	c, err := corpus.Load(root)
+	c, _, err := resolveCorpus(path, *regPath)
 	if err != nil {
 		return err
 	}
@@ -133,21 +176,14 @@ func cmdVerify(args []string) error {
 	write := fs.Bool("write", false, "inscrit verified_at et verify_status dans les notes")
 	only := fs.String("only", "", "ne verifie que les notes dont le nom contient cette chaine")
 	timeout := fs.Duration("timeout", 0, "delai par commande (defaut : celui du corpus)")
-	regPath := fs.String("perimeter", "", "registre des sources, pour les preuves adossees a une source")
+	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
 	probes := fs.Bool("probe-sources", false, "rejoue aussi la sonde de chaque source declaree")
-	root := target(args)
+	path := positional(args)
 	_ = fs.Parse(trimPositional(args))
 
-	c, err := corpus.Load(root)
+	c, reg, err := resolveCorpus(path, *regPath)
 	if err != nil {
 		return err
-	}
-	var reg *perimeter.Registry
-	if *regPath != "" {
-		reg, err = perimeter.Load(*regPath)
-		if err != nil {
-			return err
-		}
 	}
 	res, outcomes, err := verify.Run(c, verify.Options{
 		AllowExec: *allow, Write: *write, Only: *only, Timeout: *timeout,
@@ -179,10 +215,11 @@ func cmdIndex(args []string) error {
 	fs := flag.NewFlagSet("index", flag.ExitOnError)
 	fix := fs.Bool("fix", false, "ajoute a l'index les notes manquantes")
 	sync := fs.Bool("sync", false, "regenere les accroches a partir des descriptions")
-	root := target(args)
+	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
+	path := positional(args)
 	_ = fs.Parse(trimPositional(args))
 
-	c, err := corpus.Load(root)
+	c, _, err := resolveCorpus(path, *regPath)
 	if err != nil {
 		return err
 	}
@@ -475,44 +512,79 @@ func cmdReadiness(args []string) error {
 	return nil
 }
 
+// cmdInit ecrit le registre du perimetre. C'est le premier contact d'une
+// equipe avec l'outil : il pose les six roles, propose une brique pour chacun,
+// et ecrit des sondes qui fonctionnent — sinon « simple » reste un vœu.
 func cmdInit(args []string) error {
-	root := target(args)
-	path := filepath.Join(root, corpus.ConfigFile)
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("%s existe deja", path)
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	auto := fs.Bool("non-interactive", false, "ecrire un gabarit commente sans poser de questions")
+	out := fs.String("o", perimeter.File, "fichier a ecrire")
+	_ = fs.Parse(trimPositional(args))
+
+	if _, err := os.Stat(*out); err == nil {
+		return fmt.Errorf("%s existe deja — le supprimer ou choisir un autre fichier avec -o", *out)
 	}
-	if err := os.WriteFile(path, []byte(defaultConfigYAML), 0o644); err != nil {
+
+	var body string
+	if *auto {
+		body = perimeter.Template()
+	} else {
+		var err error
+		if body, err = askRegistry(os.Stdin); err != nil {
+			return err
+		}
+	}
+	if err := os.WriteFile(*out, []byte(body), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("ecrit : %s\n", path)
+	fmt.Printf("\necrit : %s\n", *out)
+	fmt.Printf("verifier avec : perctl perimeter %s\n", *out)
 	return nil
 }
 
-const defaultConfigYAML = `# Configuration d'un corpus de memoire — https://github.com/UnPoilTefal/perimeter
-version: 1
+// askRegistry mene le dialogue et rend le registre correspondant.
+func askRegistry(in io.Reader) (string, error) {
+	r := bufio.NewReader(in)
+	ask := func(q, def string) string {
+		fmt.Printf("  %s\n    [%s] ", q, def)
+		line, err := r.ReadString('\n')
+		if err != nil && strings.TrimSpace(line) == "" {
+			return def
+		}
+		if v := strings.TrimSpace(line); v != "" {
+			return v
+		}
+		return def
+	}
 
-corpus:
-  path: .
-  # L'index est le routeur du rappel : une note qui n'y figure pas est
-  # ecrite mais jamais lue. Mettre "" si le corpus n'en a pas.
-  index: MEMORY.md
-  exclude:
-    - README.md
+	fmt.Println("Registre du perimetre — six roles a pourvoir.")
+	fmt.Println("Entree pour accepter la proposition entre crochets.")
+	fmt.Println()
 
-policy:
-  types: [user, feedback, project, reference, decision]
-  # Un fait par note. Au-dela, la note ne se perime plus proprement.
-  max_body_words: 400
-  # Exiger un proprietaire : indispensable qu'on est plusieurs, sinon
-  # personne ne supprime jamais rien.
-  require_owner: false
-  staleness:
-    review_after_days: 180
-    max_stale_ratio: 0.15
+	var roles, sources strings.Builder
+	roles.WriteString("roles:\n")
+	sources.WriteString("\nsources:\n")
 
-verify:
-  timeout_seconds: 30
-`
+	for _, h := range perimeter.RoleHints {
+		fmt.Printf("· %s\n", h.Role)
+		adapter := ask("Quel type de brique ? ("+strings.Join(perimeter.Adapters, ", ")+")", h.Adapter)
+		endpoint := ask(h.Question, h.Endpoint)
+		name := strings.ReplaceAll(strings.SplitN(h.Role, ".", 2)[1], "_", "-")
+		fmt.Println()
+
+		fmt.Fprintf(&roles, "  %-22s { source: %s }\n", h.Role+":", name)
+		fmt.Fprintf(&sources, "  %s:\n    adapter: %s\n    endpoint: %q\n    reliability: %s\n",
+			name, adapter, endpoint, perimeter.ReliabilityFor(adapter))
+		sources.WriteString(perimeter.ProbeFor(adapter, endpoint))
+		if h.Role == perimeter.CorpusRole {
+			sources.WriteString("    # Politique du corpus — lue par « perctl lint ».\n")
+			sources.WriteString("    corpus:\n      index: MEMORY.md\n      max_body_words: 400\n      require_owner: false\n      staleness:\n        review_after_days: 180\n        max_stale_ratio: 0.15\n")
+		}
+	}
+	return "# Registre du perimetre — https://github.com/UnPoilTefal/perimeter\n" +
+		"# Une source est referencee et sondee, jamais recopiee.\n" +
+		"version: 1\n\n" + roles.String() + sources.String(), nil
+}
 
 func trimPositional(args []string) []string {
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {

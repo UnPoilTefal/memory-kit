@@ -48,7 +48,16 @@ jobs:
       # rendrait invisible la verification des verdicts ci-dessous.
       - run: go build -o bin/perctl ./cmd/perctl
 
-      - run: ./bin/perctl lint examples/corpus --format github --strict
+      # Le corpus est resolu depuis le registre : une equipe n'ecrit qu'un fichier.
+      - run: ./bin/perctl lint --perimeter examples/perimeter.yml --format github --strict
+      # L'usage ad hoc, sur un repertoire hors de tout perimetre declare.
+      - run: ./bin/perctl lint examples/corpus --strict
+      # Le gabarit d'init doit passer la validation sans retouche.
+      - name: Gabarit d'init
+        run: |
+          tmp=$(mktemp -d)
+          ./bin/perctl init --non-interactive -o "$tmp/perimeter.yml"
+          ./bin/perctl perimeter "$tmp/perimeter.yml"
 
       # Le registre d'exemple est la documentation executable du format :
       # roles pourvus et sources sondables.

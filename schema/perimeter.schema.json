@@ -119,6 +119,10 @@
         "note": {
           "type": "string",
           "maxLength": 200
+        },
+        "corpus": {
+          "$ref": "#/$defs/corpusPolicy",
+          "description": "Politique du corpus, quand cette source en est un. Lue par « perctl lint ». C'est ici qu'elle vit, et nulle part ailleurs : une equipe n'ecrit qu'un fichier."
         }
       }
     },
@@ -146,6 +150,79 @@
           "type": "string",
           "maxLength": 200,
           "description": "Ce que cette commande prouve, en une ligne."
+        }
+      }
+    },
+    "corpusPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Regles structurelles appliquees aux notes du corpus.",
+      "properties": {
+        "index": {
+          "type": "string",
+          "description": "Fichier qui route le rappel. Vide ou absent : le corpus n'a pas d'index et les regles correspondantes ne s'appliquent pas."
+        },
+        "exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Motifs de fichiers a ignorer."
+        },
+        "types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Registres de note acceptes."
+        },
+        "max_body_words": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Budget de mots par note. Un fait par note : au-dela, scinder."
+        },
+        "require_owner": {
+          "type": "boolean",
+          "description": "Exiger un proprietaire. Indispensable des qu'on est plusieurs, sinon personne ne supprime jamais rien."
+        },
+        "staleness": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "review_after_days": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "max_stale_ratio": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "links": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ignore_prefixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "external_roots": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Corpus voisins : un lien qui y resout n'est pas casse."
+            }
+          }
+        },
+        "verify_timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     }
