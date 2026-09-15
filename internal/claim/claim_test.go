@@ -357,3 +357,65 @@ func TestLesMarqueursLargesNInversentPas(t *testing.T) {
 		}
 	}
 }
+
+// --- motif d'adresse (#23) ---
+
+// Un numero de version n'est pas une adresse. L'ancien motif rendait les
+// octets du milieu optionnels et prenait « 10.5.67 » — la version d'OS d'une
+// gateway — pour un hote a sonder.
+func TestUnNumeroDeVersionNEstPasUneAdresse(t *testing.T) {
+	for _, phrase := range []string{
+		"Le bug de type 65 n'existe plus en 10.5.67.",
+		"La version 10.5 corrige le comportement.",
+		"Passage en v1.13.4 du schematic.",
+	} {
+		c, reg := setup(t, map[string]string{"reference-version": phrase})
+		if p, ok := find(Propose(c, reg), "reference-version"); ok && p.Kind == KindHost {
+			t.Errorf("%q : pris pour un hote (%q)", phrase, p.Match)
+		}
+	}
+}
+
+func TestUneVraieAdresseEstReconnue(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-hote": "Le NAS repond sur 192.168.40.50 en SSH.",
+	})
+	p, ok := find(Propose(c, reg), "reference-hote")
+	if !ok || p.Kind != KindHost {
+		t.Fatalf("hote attendu, obtenu %+v", p)
+	}
+	if p.Match != "192.168.40.50" {
+		t.Errorf("adresse attendue 192.168.40.50, obtenue %q", p.Match)
+	}
+}
+
+// Une adresse de reseau n'est pas une machine : la sonder echouerait
+// systematiquement. Cas reel du corpus : le CIDR des pods Calico.
+func TestUneAdresseDeReseauNEstPasUnHote(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-cidr": "Les pods vivent dans 10.244.0.0 par defaut.",
+	})
+	if p, ok := find(Propose(c, reg), "reference-cidr"); ok && p.Kind == KindHost {
+		t.Errorf("une adresse de reseau ne doit pas fonder une sonde d'hote : %q", p.Match)
+	}
+}
+
+func TestUnOctetHorsBorneEstEcarte(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-borne": "La valeur 192.168.999.1 n'est pas une adresse valide.",
+	})
+	if p, ok := find(Propose(c, reg), "reference-borne"); ok && p.Kind == KindHost {
+		t.Errorf("octet hors borne accepte : %q", p.Match)
+	}
+}
+
+// Une vraie adresse dans la meme zone qu'une version doit quand meme etre vue.
+func TestUneAdresseCoexisteAvecUneVersion(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-mixte": "En 10.5.67, la gateway 192.168.40.254 intercepte le port 53.",
+	})
+	p, ok := find(Propose(c, reg), "reference-mixte")
+	if !ok || p.Match != "192.168.40.254" {
+		t.Errorf("l'adresse reelle devait etre retenue, obtenu %+v", p)
+	}
+}

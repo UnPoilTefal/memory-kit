@@ -22,6 +22,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/UnPoilTefal/perimeter/internal/corpus"
@@ -89,9 +90,15 @@ func (r *Result) Coverage() float64 {
 // pathRe et consorts : signaux structurels ancres. Chacun exige un prefixe
 // reconnaissable — jamais un motif generique.
 var (
-	pathRe     = regexp.MustCompile(`(?:^|[\s` + "`" + `(])((?:/(?:Users|opt|volume1|etc|Applications)/|~/)[\w./\-]{4,})`)
-	urlRe      = regexp.MustCompile(`https?://[\w.\-]+\.[a-z]{2,}(?:/[\w./\-]*)?`)
-	ipRe       = regexp.MustCompile(`\b(?:192\.168|10\.)\.?\d{0,3}\.?\d{0,3}\.\d{1,3}\b`)
+	pathRe = regexp.MustCompile(`(?:^|[\s` + "`" + `(])((?:/(?:Users|opt|volume1|etc|Applications)/|~/)[\w./\-]{4,})`)
+	urlRe  = regexp.MustCompile(`https?://[\w.\-]+\.[a-z]{2,}(?:/[\w./\-]*)?`)
+	// Quatre octets pleins, obligatoires. L'ancien motif rendait les octets
+	// du milieu optionnels et prenait « 10.5.67 » — une version d'OS — pour
+	// une adresse.
+	// Chaque branche porte son compte d'octets : « 192.168 » en contient deja
+	// deux, « 10 » un seul. L'ancien motif rendait les octets du milieu
+	// optionnels et prenait « 10.5.67 » — une version d'OS — pour une adresse.
+	ipRe       = regexp.MustCompile(`\b(?:192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b`)
 	semverRe   = regexp.MustCompile(`\bv\d+\.\d+\.\d+\b`)
 	trailingRe = regexp.MustCompile(`[.,;:)` + "`" + `]+$`)
 
@@ -250,6 +257,31 @@ func anchorsFor(adapter, endpoint string) []anchor {
 	}
 }
 
+// premierHote rend la premiere adresse de la zone qui designe un hote
+// joignable. Une adresse est ecartee si un octet depasse 255, ou si le dernier
+// vaut 0 : « 10.244.0.0 » est un plan d'adressage de pods, pas une machine, et
+// la sonder produirait une sonde vouee a echouer.
+func premierHote(zone string) string {
+	for _, m := range ipRe.FindAllString(zone, -1) {
+		octets := strings.Split(m, ".")
+		if len(octets) != 4 {
+			continue
+		}
+		valide := true
+		for i, o := range octets {
+			n, err := strconv.Atoi(o)
+			if err != nil || n > 255 || (i == 3 && n == 0) {
+				valide = false
+				break
+			}
+		}
+		if valide {
+			return m
+		}
+	}
+	return ""
+}
+
 // fromStructure propose depuis un signal reconnaissable sans le registre. La
 // sonde reste en lecture seule et d'une forme connue.
 func fromStructure(n *corpus.Note, zone, body string) (Proposal, bool) {
@@ -274,7 +306,7 @@ func fromStructure(n *corpus.Note, zone, body string) (Proposal, bool) {
 			Why:    "mentionne une adresse HTTP",
 		}, true
 	}
-	if m := ipRe.FindString(zone); m != "" {
+	if m := premierHote(zone); m != "" {
 		return Proposal{
 			Note: n.Rel, Kind: KindHost, Confidence: Structural, Match: m,
 			Cmd: fmt.Sprintf("cmd: %q", "ping -c1 -W2 "+m+" >/dev/null"),
