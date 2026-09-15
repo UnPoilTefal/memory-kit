@@ -125,7 +125,8 @@ Le schéma complet : [`schema/memory.schema.json`](schema/memory.schema.json)
 | `description` | avert. | une description qui ne permet pas de décider du rappel |
 | `atomicity` | avert. | une note trop large ne se périme jamais proprement |
 | `ownership` | avert. | sans propriétaire, personne ne supprime jamais rien |
-| `staleness` | avert. | une note dont l'échéance de relecture est passée, **ou qui n'a aucune date** |
+| `staleness` | avert. | une note dont l'échéance de relecture est passée |
+| `staleness` | **erreur** | une note sans aucune date — voir `policy.require_date` |
 | `staleness-budget` | erreur | le corpus dérive plus vite qu'il n'est relu |
 | `secret` | erreur | la mémoire est rechargée à chaque session : c'est un vecteur de fuite |
 
@@ -215,6 +216,20 @@ qu'au troisième paragraphe.
 se prouve par `! test -e`, pas par `test -e` — qui échouerait alors que la note dit vrai. La
 détection est locale à la phrase portant le signal, et n'accepte que des marqueurs francs :
 « jamais » et « aucun » visaient 24 notes sur 101, dont la plupart n'énoncent aucune absence.
+
+**Une note sans date est une erreur, pas un avertissement** — `policy.require_date`, vrai par
+défaut. Une note qu'aucune date ne rattache au temps est hors de portée de toute péremption :
+aucun budget, aucune demi-vie ne l'atteindra jamais. Mesure sur un corpus réel : **18 % des
+notes** étaient dans ce cas, et l'avertissement ne les avait jamais fait corriger — il se noyait
+dans le bruit.
+
+Trois champs valent : `modified`, `verified_at`, `review_after`. Un seul suffit — exiger nommément
+`modified` rejetterait une note prouvée la veille par `verify`.
+
+⚠️ Un corpus existant qui ne peut pas s'y plier tout de suite déclare `require_date: false` plutôt
+que de désactiver `staleness` en entier, ce qui lui ferait perdre aussi la détection de péremption.
+**Combler les dates d'abord, durcir ensuite** : l'inverse fait basculer d'un coup toutes les notes
+sans date en erreur, et la règle est désactivée avant d'avoir servi.
 
 Le budget de relecture est **unique pour tout le corpus** — `policy.staleness.review_after_days`.
 Une demi-vie par type, un chemin se périmant plus vite qu'une convention, se défend en principe

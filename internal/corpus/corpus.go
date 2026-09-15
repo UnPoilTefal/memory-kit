@@ -47,6 +47,14 @@ type Config struct {
 		// deux ; le choix appartient a l'equipe, rien ne permet de le
 		// deduire du corpus.
 		IndexHook string `yaml:"index_hook"`
+
+		// RequireDate fait d'une note sans date une erreur et non un
+		// avertissement. Une note qu'aucune date ne rattache au temps ne
+		// peut pas vieillir : sa peremption est invisible quel que soit
+		// le budget de relecture. Mesure sur un corpus reel : 18 % des
+		// notes etaient dans ce cas, et l'avertissement ne les avait
+		// jamais fait corriger.
+		RequireDate bool `yaml:"require_date"`
 	} `yaml:"policy"`
 
 	// Links declare les corpus voisins vers lesquels un lien est legitime.
@@ -73,6 +81,7 @@ func DefaultConfig() *Config {
 	c.Policy.Staleness.ReviewAfterDays = 180
 	c.Policy.Staleness.MaxStaleRatio = 0.15
 	c.Policy.IndexHook = IndexHookDerived
+	c.Policy.RequireDate = true
 	// Un lien commencant par / designe une commande ou une skill, pas une note.
 	c.Links.IgnorePrefixes = []string{"/"}
 	c.Verify.TimeoutSeconds = 30
@@ -124,6 +133,11 @@ func ConfigFromPolicy(p *perimeter.CorpusPolicy) *Config {
 	cfg.Policy.RequireOwner = p.RequireOwner
 	if p.IndexHook != "" {
 		cfg.Policy.IndexHook = p.IndexHook
+	}
+	// Pointeur cote registre : un booleen absent ne se distingue pas d'un
+	// booleen a false, et le defaut est ici true.
+	if p.RequireDate != nil {
+		cfg.Policy.RequireDate = *p.RequireDate
 	}
 	if p.Staleness.ReviewAfterDays > 0 {
 		cfg.Policy.Staleness.ReviewAfterDays = p.Staleness.ReviewAfterDays
