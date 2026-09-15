@@ -9,6 +9,8 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,6 +24,7 @@ import (
 	"github.com/UnPoilTefal/perimeter/internal/ciguard"
 	"github.com/UnPoilTefal/perimeter/internal/claim"
 	"github.com/UnPoilTefal/perimeter/internal/corpus"
+	"github.com/UnPoilTefal/perimeter/internal/draft"
 	"github.com/UnPoilTefal/perimeter/internal/lint"
 	"github.com/UnPoilTefal/perimeter/internal/perimeter"
 	"github.com/UnPoilTefal/perimeter/internal/probediff"
@@ -44,6 +47,7 @@ const usage = `perctl — savoir si un agent peut agir sur un perimetre
   perctl gate <evaluation> derive le verdict de readiness d'une specification
   perctl readiness         etat de sortie de demarrage, et regime qui en decoule
   perctl propose [chemin]  propose une sonde pour les notes qui n'en portent pas
+  perctl draft  [fichier]  juge un brouillon avant de l'ecrire (« - » ou rien : entree standard)
   perctl init   [chemin]   ecrit un .corpus.yml
   perctl schema            ecrit le JSON Schema sur la sortie standard
   perctl version
@@ -72,6 +76,8 @@ func main() {
 		err = cmdReadiness(os.Args[2:])
 	case "propose":
 		err = cmdPropose(os.Args[2:])
+	case "draft":
+		err = cmdDraft(os.Args[2:])
 	case "init":
 		err = cmdInit(os.Args[2:])
 	case "schema":
@@ -823,4 +829,176 @@ func splitList(s string) []string {
 		parts[i] = strings.TrimSpace(parts[i])
 	}
 	return parts
+}
+
+// cmdDraft juge un brouillon de note contre le corpus, sans jamais l'ecrire.
+// C'est le pendant outil du portillon d'ecriture : il ne repond pas aux trois
+// questions du portillon — ce sont des jugements — mais il repond a « ce nom
+// est-il pris », « est-ce que ca existe deja », « la note est-elle conforme ».
+func cmdDraft(args []string) error {
+	fs := flag.NewFlagSet("draft", flag.ExitOnError)
+	corpusPath := fs.String("corpus", "", "corpus de reference (defaut : celui du registre)")
+	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
+	voisins := fs.Int("voisins", 0, "nombre de notes proches rendues (defaut 3)")
+	format := fs.String("format", "human", "human | json")
+	chemin := positional(args)
+	_ = fs.Parse(trimPositional(args))
+
+	raw, rel, err := lireBrouillon(chemin)
+	if err != nil {
+		return err
+	}
+	n, err := corpus.ParseNote(rel, raw)
+	if err != nil {
+		return err
+	}
+	// Un brouillon vit dans un fichier temporaire, ou sur l'entree standard :
+	// le chemin ou il se trouve ne dit rien du nom qu'il doit porter. C'est
+	// le champ name qui fait foi — sinon name-match se declenche a tort sur
+	// chaque brouillon, et la collision n'est pas detectable.
+	if n.ParseErr == nil && n.Name != "" {
+		n, _ = corpus.ParseNote(n.Name+".md", raw)
+	}
+
+	c, reg, err := resolveCorpus(*corpusPath, *regPath)
+	if err != nil {
+		return err
+	}
+
+	v, err := draft.Check(c, n, reg, draft.Options{Voisins: *voisins})
+	if err != nil {
+		return err
+	}
+
+	if *format == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(draftJSON(n, v)); err != nil {
+			return err
+		}
+	} else if err := ecrireVerdict(os.Stdout, c, n, v); err != nil {
+		return err
+	}
+	if v.Bloquant() {
+		return fail(1)
+	}
+	return nil
+}
+
+func lireBrouillon(chemin string) ([]byte, string, error) {
+	if chemin == "" || chemin == "-" {
+		raw, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, "", err
+		}
+		if len(bytes.TrimSpace(raw)) == 0 {
+			return nil, "", fmt.Errorf("brouillon vide sur l'entree standard — passer un fichier, ou ecrire la note sur stdin")
+		}
+		return raw, "brouillon.md", nil
+	}
+	raw, err := os.ReadFile(chemin)
+	if err != nil {
+		return nil, "", err
+	}
+	return raw, filepath.Base(chemin), nil
+}
+
+// sortie retient la premiere erreur d'ecriture et se tait ensuite : un
+// verdict s'ecrit d'un bloc, le decouper en controles d'erreur le rendrait
+// illisible pour rien.
+type sortie struct {
+	w   io.Writer
+	err error
+}
+
+func (s *sortie) f(format string, a ...any) {
+	if s.err != nil {
+		return
+	}
+	_, s.err = fmt.Fprintf(s.w, format, a...)
+}
+
+func ecrireVerdict(w io.Writer, c *corpus.Corpus, n *corpus.Note, v *draft.Verdict) error {
+	o := &sortie{w: w}
+	o.f("brouillon : %s\ncorpus    : %s (%d notes)\n\n", n.Rel, c.Root, len(c.Notes))
+	if n.ParseErr == nil && n.Name == "" {
+		o.f("! nom       le champ name est vide : impossible de dire ou ecrire la note\n\n")
+	}
+
+	if v.Collision != nil {
+		o.f("x collision  %s porte deja ce nom\n", v.Collision.Rel)
+		o.f("             « %s »\n", v.Collision.Desc)
+		o.f("             completer cette note, ou choisir un autre nom\n\n")
+	}
+
+	for _, f := range v.Findings {
+		marque := "!"
+		if f.Severity == report.Error {
+			marque = "x"
+		}
+		o.f("%s %-10s %s\n", marque, f.Rule, f.Message)
+		if f.Hint != "" {
+			o.f("             %s\n", f.Hint)
+		}
+	}
+	if len(v.Findings) > 0 {
+		o.f("\n")
+	}
+
+	if len(v.Voisins) > 0 {
+		o.f("est-ce que ca existe deja ? %d note(s) proche(s) — a juger, ce n'est pas un verdict\n", len(v.Voisins))
+		for _, vo := range v.Voisins {
+			o.f("  %.2f  %s\n", vo.Score, vo.Note.Rel)
+			o.f("        « %s »\n", vo.Note.Desc)
+			o.f("        en commun : %s\n", strings.Join(vo.Termes, ", "))
+		}
+		o.f("\n")
+	}
+
+	if v.Verify != nil {
+		o.f("preuve proposable (%s) : %s\n", v.Verify.Confidence, v.Verify.Cmd)
+		if v.Verify.Why != "" {
+			o.f("        %s\n", v.Verify.Why)
+		}
+		o.f("\n")
+	}
+
+	if v.Bloquant() {
+		o.f("-> ne pas ecrire en l'etat\n")
+	} else {
+		o.f("-> rien ne s'oppose a l'ecriture cote outil\n")
+	}
+	o.f("   restent les trois questions du portillon, qui ne se mecanisent pas :\n")
+	o.f("   non re-derivable ? non ephemere ? comptera dans trois mois ?\n")
+	return o.err
+}
+
+type draftSortie struct {
+	Brouillon string           `json:"brouillon"`
+	Bloquant  bool             `json:"bloquant"`
+	Collision string           `json:"collision,omitempty"`
+	Findings  []report.Finding `json:"findings"`
+	Voisins   []draftVoisin    `json:"voisins"`
+	Verify    *claim.Proposal  `json:"verify,omitempty"`
+}
+
+type draftVoisin struct {
+	Note   string   `json:"note"`
+	Score  float64  `json:"score"`
+	Termes []string `json:"termes"`
+}
+
+func draftJSON(n *corpus.Note, v *draft.Verdict) draftSortie {
+	out := draftSortie{Brouillon: n.Rel, Bloquant: v.Bloquant(), Findings: v.Findings, Verify: v.Verify}
+	if out.Findings == nil {
+		out.Findings = []report.Finding{}
+	}
+	if v.Collision != nil {
+		out.Collision = v.Collision.Rel
+	}
+	out.Voisins = []draftVoisin{}
+	for _, vo := range v.Voisins {
+		out.Voisins = append(out.Voisins, draftVoisin{Note: vo.Note.Rel, Score: vo.Score, Termes: vo.Termes})
+	}
+	return out
 }

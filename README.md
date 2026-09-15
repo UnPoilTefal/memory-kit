@@ -579,6 +579,35 @@ Trois questions avant d'écrire quoi que ce soit. Une seule réponse négative, 
 Plus une contrainte dure : **un fait par fichier**. C'est ce qui rend le dédoublonnage et
 la péremption praticables.
 
+### Vérifier un brouillon — `perctl draft`
+
+Le portillon ne se mécanise pas : les trois questions sont des jugements, et un
+outil qui prétendrait y répondre donnerait une fausse assurance. `perctl draft`
+fait ce qui est mécanique, et **n'écrit jamais**.
+
+```bash
+perctl draft brouillon.md          # ou : ... | perctl draft -
+```
+
+| Ce qu'il rend | |
+|---|---|
+| **collision** | une note porte déjà ce `name` — la compléter, pas en créer une seconde |
+| **constats** | schéma, registre, description, longueur, secret |
+| **voisinage** | « est-ce que ça existe déjà ? » — liste courte ordonnée |
+| **preuve** | un bloc `verify` proposé quand la note énonce un fait testable |
+
+Le nom du fichier est déduit du champ `name`, pas du chemin : un brouillon vit
+dans un fichier temporaire, et c'est le `name` qui dit où la note doit aller.
+
+⚠️ **Le voisinage classe, il ne tranche pas.** Mesure sur un corpus réel de 104
+notes : les vrais recouvrements sortent bien en tête, mais l'échelle absolue ne
+veut rien dire — le meilleur voisin médian vaut 0,106, soit du bruit. D'où un
+**plafond** et non un seuil : le coût de relecture est connu d'avance, et le
+verdict reste à l'humain ou à l'agent.
+
+Le skill correspondant — le portillon complet, portable vers un harnais d'agent —
+est dans [`skills/remember/SKILL.md`](skills/remember/SKILL.md).
+
 ### Écrire la description
 
 C'est la description, pas le corps, que l'agent lit pour décider si la note est

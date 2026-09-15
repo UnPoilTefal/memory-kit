@@ -77,6 +77,37 @@ jobs:
           ./bin/perctl index --sync --perimeter examples/perimeter.yml > /dev/null
           git checkout -- examples/
 
+      # « draft » juge un brouillon et n'ecrit jamais — ni le brouillon, ni le
+      # corpus. C'est la contrainte dure du portillon : des propositions
+      # relues, pas des ecritures.
+      - name: draft ne modifie rien et bloque sur collision
+        run: |
+          avant=$(git status --porcelain examples/ | wc -l)
+          cat > /tmp/brouillon.md <<'MD'
+          ---
+          name: reference-tout-nouveau
+          description: "Un fait entierement nouveau, enonce assez precisement pour etre jugeable"
+          metadata:
+            type: reference
+            modified: 2026-09-15
+          ---
+
+          Un fait.
+          MD
+          ./bin/perctl draft /tmp/brouillon.md --perimeter examples/perimeter.yml
+          # Un nom deja pris doit bloquer : sinon le fichier ecrase une note.
+          existante=$(ls examples/corpus/*.md | grep -v MEMORY | head -1 | xargs basename | sed 's/\.md$//')
+          sed "s/reference-tout-nouveau/$existante/" /tmp/brouillon.md > /tmp/collision.md
+          if ./bin/perctl draft /tmp/collision.md --perimeter examples/perimeter.yml; then
+            echo "::error::draft aurait du bloquer sur une collision de nom"
+            exit 1
+          fi
+          apres=$(git status --porcelain examples/ | wc -l)
+          if [ "$avant" != "$apres" ]; then
+            echo "::error::draft a modifie le corpus"
+            exit 1
+          fi
+
       # « propose » ne doit jamais rien ecrire sans --write.
       - name: Propose sans effet de bord
         run: |
