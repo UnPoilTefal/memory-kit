@@ -386,6 +386,8 @@ func cmdGate(args []string) error {
 	corpusPath := fs.String("corpus", "", "corpus de memoire, pour verifier la fraicheur des faits mobilises")
 	ledger := fs.String("ledger", readiness.LedgerFile, "journal des passages")
 	noRecord := fs.Bool("no-record", false, "ne consigne pas ce passage")
+	allow := fs.Bool("allow-exec", false, "rejoue les preuves de resolution des carences comblees")
+	untrusted := fs.Bool("allow-exec-untrusted", false, "executer meme dans un contexte ou le contenu vient de l'exterieur")
 	path := target(args)
 	_ = fs.Parse(trimPositional(args))
 	if path == "." {
@@ -408,6 +410,21 @@ func cmdGate(args []string) error {
 	if err != nil {
 		return err
 	}
+
+	if *allow {
+		if !*untrusted {
+			if v := ciguard.AssessDefault(); !v.Trusted {
+				fmt.Fprintf(os.Stderr, "\n  contexte : %s\n  %s\n\n", v.Context, v.Reason) //nolint:errcheck // sortie terminal
+				return fmt.Errorf("rejeu des preuves de resolution refuse dans ce contexte")
+			}
+		}
+		if echecs := rejouerResolutions(a, *regPath); len(echecs) > 0 {
+			for _, e := range echecs {
+				pre = append(pre, readiness.Precondition{Code: "resolution-non-tenue", Message: e})
+			}
+		}
+	}
+
 	d := a.Derive(pre)
 
 	fmt.Printf("%s\n\n  verdict : %s\n", d.Spec, strings.ToUpper(string(d.Verdict)))
@@ -417,11 +434,15 @@ func cmdGate(args []string) error {
 	if d.Escalation != "" {
 		fmt.Printf("\n  escalade classee : %s\n", d.Escalation)
 	}
+	if d.ResolutionsNonProuvees > 0 && !*allow {
+		fmt.Printf("\n  %d resolution(s) sans preuve rejouable — « perctl gate … --allow-exec » les verifierait\n", d.ResolutionsNonProuvees)
+	}
 
 	if !*noRecord {
 		e := readiness.Entry{
 			At: time.Now().UTC(), Spec: a.Spec, Verdict: d.Verdict,
 			Escalation: d.Escalation, Assessment: filepath.Base(path),
+			ResolutionsNonProuvees: d.ResolutionsNonProuvees,
 		}
 		if err := readiness.Append(*ledger, e); err != nil {
 			return fmt.Errorf("journal : %w", err)
@@ -498,6 +519,43 @@ func preconditions(regPath, corpusPath string, a *readiness.Assessment) ([]readi
 
 // cmdReadiness rend l'etat de sortie de demarrage. Le regime n'est pas un
 // reglage : il se deduit du journal, donc il ne peut pas pourrir.
+// rejouerResolutions verifie que les carences declarees comblees le sont
+// vraiment. Une resolution qui ne tient pas devient une precondition, donc
+// elle empeche « produire » — au meme titre qu'un fait dont la preuve a lache.
+func rejouerResolutions(a *readiness.Assessment, regPath string) []string {
+	var reg *perimeter.Registry
+	if regPath != "" {
+		reg, _ = perimeter.Load(regPath)
+	}
+	var echecs []string
+	for _, def := range a.Deficiencies {
+		if !def.Resolved || !def.Prouvee() {
+			continue
+		}
+		chk := *def.ResolvedProof
+		if chk.ViaSource() {
+			if reg == nil {
+				echecs = append(echecs, fmt.Sprintf("carence %q : sa preuve renvoie a une source, mais aucun registre n'est charge", def.ID))
+				continue
+			}
+			cmd, err := reg.Resolve(chk.Source, chk.Arg)
+			if err != nil {
+				echecs = append(echecs, fmt.Sprintf("carence %q : %v", def.ID, err))
+				continue
+			}
+			resolu := corpus.Check{Cmd: cmd.Cmd, ExpectExit: cmd.ExpectExit, ExpectStdout: cmd.ExpectStdout}
+			if chk.ExpectStdout != "" {
+				resolu.ExpectStdout = chk.ExpectStdout
+			}
+			chk = resolu
+		}
+		if r := verify.RunCheck(chk, 30*time.Second); r.Status != "pass" {
+			echecs = append(echecs, fmt.Sprintf("carence %q declaree resolue, mais sa preuve ne tient pas : %s", def.ID, r.Reason))
+		}
+	}
+	return echecs
+}
+
 func cmdReadiness(args []string) error {
 	fs := flag.NewFlagSet("readiness", flag.ExitOnError)
 	ledger := fs.String("ledger", readiness.LedgerFile, "journal des passages")
@@ -518,6 +576,11 @@ func cmdReadiness(args []string) error {
 	fmt.Printf("  phase  : %s\n", phase)
 	fmt.Printf("  regime : %s\n", m.Mode)
 	fmt.Printf("  %s\n", m.Reason)
+	if m.NonProuvees > 0 {
+		fmt.Printf("\n  ⚠ %d resolution(s) affirmee(s) sans preuve sur la fenetre\n", m.NonProuvees)
+		fmt.Printf("  Une porte se contourne en reclassant une ambiguite d'intention en carence\n")
+		fmt.Printf("  mesurable, puis en la declarant resolue. C'est le signal qui le montre.\n")
+	}
 
 	if len(entries) > 0 {
 		fmt.Printf("\n  derniers passages :\n")

@@ -440,6 +440,45 @@ Et une cohérence : un test bloqué doit désigner une carence existante, une ca
 quelque chose ou être résolue. Sans ça, omettre de classer ce qui bloque produirait un verdict
 faussement vert.
 
+### Une résolution s'affirme, ou elle se prouve
+
+Le verdict dérive de la classification des carences, et cette classification est **déclarée par
+l'auteur de l'évaluation**. Un agent qui cherche `produire` peut reclasser une ambiguïté
+d'intention en carence mesurable, la déclarer résolue, et rien dans la structure du document ne
+le trahit.
+
+```yaml
+deficiencies:
+  - id: seuil-inconnu
+    classification: mesurable
+    statement: "le seuil n'est pas connu — il se lit dans l'historique"
+    resolved: true
+    resolved_by: "lu dans l'historique : 3 échecs consécutifs"   # obligatoire
+    resolved_proof:                                              # ce qui la rend vérifiable
+      cmd: "…"
+      expect_stdout: "^3$"
+```
+
+`resolved_by` est **obligatoire** dès que `resolved` vaut `true` : une résolution qui ne dit pas
+ce qui a été fait n'est vérifiable par personne, pas même par un humain.
+
+`resolved_proof` la rend rejouable. *« Je suis allé mesurer X »* se prouve par la mesure — c'est
+l'axiome du produit appliqué à sa propre porte.
+
+```bash
+perctl gate evaluation.yml --allow-exec    # rejoue les preuves de résolution
+```
+
+Une résolution dont la preuve ne tient pas **empêche `produire`**, au même titre qu'un fait dont
+la preuve a lâché. Le garde-fou d'exécution s'applique ici aussi.
+
+Une résolution seulement affirmée ne bloque pas — mais elle est **comptée**, et le compte va au
+journal. C'est l'accumulation qui révèle qu'une porte est contournée par reclassement :
+
+```
+⚠ 3 résolution(s) affirmée(s) sans preuve sur la fenêtre
+```
+
 ### Sortir du démarrage
 
 Chaque passage est consigné dans un journal **en ajout seul** — on ne réécrit pas l'histoire des

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/UnPoilTefal/perimeter/internal/corpus"
 	"github.com/UnPoilTefal/perimeter/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"golang.org/x/text/language"
@@ -53,11 +54,24 @@ type Test struct {
 
 // Deficiency est une carence rencontree en tentant d'ecrire les tests.
 type Deficiency struct {
-	ID             string `yaml:"id"`
-	Classification string `yaml:"classification"`
-	Statement      string `yaml:"statement"`
-	Resolved       bool   `yaml:"resolved"`
-	ResolvedBy     string `yaml:"resolved_by"`
+	ID             string        `yaml:"id"`
+	Classification string        `yaml:"classification"`
+	Statement      string        `yaml:"statement"`
+	Resolved       bool          `yaml:"resolved"`
+	ResolvedBy     string        `yaml:"resolved_by"`
+	ResolvedProof  *corpus.Check `yaml:"resolved_proof"`
+}
+
+// Prouvee dit si la resolution porte une preuve rejouable, par opposition a
+// une simple affirmation.
+//
+// C'est le trou que cette structure ferme : « resolved: true » est exactement
+// l'affirmation datee que « verify » existe pour bannir. Un agent qui cherche
+// un verdict « produire » peut reclasser une ambiguite d'intention en carence
+// mesurable, la declarer resolue, et rien dans la structure du document ne le
+// trahit.
+func (d Deficiency) Prouvee() bool {
+	return d.ResolvedProof != nil && (d.ResolvedProof.Cmd != "" || d.ResolvedProof.Source != "")
 }
 
 // Assessment est une evaluation de readiness.
@@ -178,6 +192,11 @@ type Decision struct {
 	// Escalation porte la classification qui a fait rendre la main, quand
 	// c'est le cas. C'est elle qui alimente E3.
 	Escalation string
+	// ResolutionsNonProuvees compte les carences declarees resolues sans
+	// preuve rejouable. Elles ne bloquent pas, mais elles sont consignees :
+	// c'est la seule facon de voir, dans la duree, qu'une porte est
+	// contournee par reclassement.
+	ResolutionsNonProuvees int
 }
 
 // Derive rend le verdict. Les preconditions mecaniques sont fournies par
@@ -214,6 +233,10 @@ func (a *Assessment) Derive(pre []Precondition) Decision {
 	for _, def := range byClass[Mesurable] {
 		if !def.Resolved {
 			pending++
+			continue
+		}
+		if !def.Prouvee() {
+			d.ResolutionsNonProuvees++
 		}
 	}
 	if pending > 0 {
@@ -232,21 +255,48 @@ func (a *Assessment) Derive(pre []Precondition) Decision {
 		return d
 	}
 
-	var blocked []string
-	for _, t := range a.Tests {
-		if t.Status == "blocked" {
-			blocked = append(blocked, t.ID)
+	// Arrive ici, plus aucune carence n'est ouverte. Un test encore bloque
+	// signifie que la carence qui l'empechait a ete comblee sans que le test
+	// soit ecrit : il reste a le faire, ce n'est pas une carence de plus.
+	resolue := map[string]bool{}
+	for _, def := range a.Deficiencies {
+		if def.Resolved {
+			resolue[def.ID] = true
 		}
 	}
-	if len(blocked) > 0 {
-		sort.Strings(blocked)
+	var comblees, orphelins []string
+	for _, t := range a.Tests {
+		if t.Status != "blocked" {
+			continue
+		}
+		if resolue[t.BlockedBy] {
+			comblees = append(comblees, t.ID)
+		} else {
+			orphelins = append(orphelins, t.ID)
+		}
+	}
+	if len(comblees) > 0 || len(orphelins) > 0 {
+		sort.Strings(comblees)
+		sort.Strings(orphelins)
 		d.Verdict = Instruire
-		d.Reasons = append(d.Reasons, fmt.Sprintf("tests non ecrits sans carence qui les explique : %s", strings.Join(blocked, ", ")))
+		if len(comblees) > 0 {
+			d.Reasons = append(d.Reasons, fmt.Sprintf(
+				"la carence est comblee mais le test reste a ecrire : %s", strings.Join(comblees, ", ")))
+		}
+		if len(orphelins) > 0 {
+			d.Reasons = append(d.Reasons, fmt.Sprintf(
+				"tests non ecrits sans carence qui les explique : %s", strings.Join(orphelins, ", ")))
+		}
 		return d
 	}
 
 	d.Verdict = Produire
 	d.Reasons = append(d.Reasons, fmt.Sprintf("%d test(s) d'acceptation ecrits, aucune carence ouverte", len(a.Tests)))
+	if d.ResolutionsNonProuvees > 0 {
+		d.Reasons = append(d.Reasons, fmt.Sprintf(
+			"%d resolution(s) affirmee(s) sans preuve rejouable — « je suis alle mesurer » se prouve par la mesure",
+			d.ResolutionsNonProuvees))
+	}
 	return d
 }
 
@@ -275,6 +325,9 @@ func (a *Assessment) Coherence() []string {
 		referenced[t.BlockedBy] = true
 	}
 	for _, d := range a.Deficiencies {
+		if d.Resolved && strings.TrimSpace(d.ResolvedBy) == "" {
+			issues = append(issues, fmt.Sprintf("carence %q est declaree resolue sans dire ce qui a ete fait (resolved_by)", d.ID))
+		}
 		if d.Classification == Mesurable && d.Resolved {
 			continue
 		}

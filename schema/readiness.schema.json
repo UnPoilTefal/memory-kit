@@ -4,10 +4,16 @@
   "title": "Readiness assessment",
   "description": "Evaluation de readiness d'une specification. L'auteur consigne les tests d'acceptation qu'il a su ecrire et les carences qu'il a rencontrees ; le verdict est derive, jamais declare.",
   "type": "object",
-  "required": ["version", "spec", "tests"],
+  "required": [
+    "version",
+    "spec",
+    "tests"
+  ],
   "additionalProperties": false,
   "properties": {
-    "version": { "const": 1 },
+    "version": {
+      "const": 1
+    },
     "spec": {
       "type": "string",
       "minLength": 3,
@@ -20,16 +26,33 @@
       "description": "Les tests d'acceptation. Celui qu'on ne sait pas ecrire localise la zone d'ombre : c'est l'information, pas l'echec.",
       "items": {
         "type": "object",
-        "required": ["id", "assertion", "status"],
+        "required": [
+          "id",
+          "assertion",
+          "status"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
-          "assertion": { "type": "string", "minLength": 10, "maxLength": 400 },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
+          "assertion": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 400
+          },
           "status": {
             "description": "writable = l'assertion est ecrite et verifiable. blocked = elle ne peut pas l'etre, et blocked_by dit pourquoi.",
-            "enum": ["writable", "blocked"]
+            "enum": [
+              "writable",
+              "blocked"
+            ]
           },
-          "blocked_by": { "type": "string", "description": "Identifiant de la carence qui empeche d'ecrire ce test." }
+          "blocked_by": {
+            "type": "string",
+            "description": "Identifiant de la carence qui empeche d'ecrire ce test."
+          }
         }
       }
     },
@@ -38,28 +61,100 @@
       "description": "Les carences rencontrees, classees. La classification decide de l'issue, pas l'appreciation de l'auteur.",
       "items": {
         "type": "object",
-        "required": ["id", "classification", "statement"],
+        "required": [
+          "id",
+          "classification",
+          "statement"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+          },
           "classification": {
             "description": "mesurable = l'agent peut aller la combler. connaissance = le savoir n'est dans aucune source declaree. intention = seule l'ambiguite d'intention justifie de rendre la main.",
-            "enum": ["mesurable", "connaissance", "intention"]
+            "enum": [
+              "mesurable",
+              "connaissance",
+              "intention"
+            ]
           },
-          "statement": { "type": "string", "minLength": 10, "maxLength": 400 },
+          "statement": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 400
+          },
           "resolved": {
             "type": "boolean",
             "default": false,
             "description": "Pour une carence mesurable : l'agent est alle la combler."
           },
-          "resolved_by": { "type": "string", "maxLength": 300 }
+          "resolved_by": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Ce que l'agent est alle chercher, en une ligne. Obligatoire des que resolved vaut true : une resolution sans enonce n'est pas verifiable, meme par un humain."
+          },
+          "resolved_proof": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "La preuve de la resolution. « Je suis alle mesurer X » se prouve par la mesure — c'est l'axiome du produit applique a sa propre porte.",
+            "oneOf": [
+              {
+                "required": [
+                  "cmd"
+                ],
+                "not": {
+                  "required": [
+                    "source"
+                  ]
+                }
+              },
+              {
+                "required": [
+                  "source"
+                ],
+                "not": {
+                  "required": [
+                    "cmd"
+                  ]
+                }
+              }
+            ],
+            "properties": {
+              "cmd": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Commande en lecture seule. Exclusif avec source."
+              },
+              "source": {
+                "type": "string",
+                "description": "Identifiant d'une source du registre de perimetre. Exclusif avec cmd."
+              },
+              "arg": {
+                "type": "string",
+                "description": "Parametre substitue a ${arg} dans l'interrogation de la source."
+              },
+              "expect_exit": {
+                "type": "integer",
+                "default": 0
+              },
+              "expect_stdout": {
+                "type": "string",
+                "description": "Expression reguliere RE2 que stdout doit satisfaire."
+              }
+            }
+          }
         }
       }
     },
     "facts": {
       "type": "array",
       "description": "Notes du corpus mobilisees. Leur fraicheur conditionne le verdict : s'appuyer sur un fait dont la preuve ne tient plus, c'est agir sur une premisse fausse.",
-      "items": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" }
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+      }
     }
   }
 }

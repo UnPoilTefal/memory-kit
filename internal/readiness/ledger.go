@@ -25,6 +25,10 @@ type Entry struct {
 	Verdict    Verdict   `json:"verdict"`
 	Escalation string    `json:"escalation,omitempty"`
 	Assessment string    `json:"assessment,omitempty"`
+	// ResolutionsNonProuvees consigne les carences declarees resolues sans
+	// preuve rejouable. Un passage isole ne dit rien ; leur accumulation
+	// dit qu'une porte est contournee par reclassement.
+	ResolutionsNonProuvees int `json:"resolutions_non_prouvees,omitempty"`
 }
 
 // Append ajoute un passage au journal, en le creant au besoin.
@@ -102,6 +106,11 @@ type Maturity struct {
 	Bootstrap bool
 	Mode      Mode
 	Reason    string
+	// Resolutions et NonProuvees mesurent l'integrite de la porte elle-meme
+	// sur la fenetre : combien de resolutions ont ete affirmees, combien
+	// sans preuve rejouable.
+	Resolutions int
+	NonProuvees int
 }
 
 // Assess rend l'etat de maturite depuis le journal.
@@ -132,6 +141,7 @@ func Assess(entries []Entry, window int) Maturity {
 		if e.Escalation == Connaissance {
 			m.KnowledgeEscalations++
 		}
+		m.NonProuvees += e.ResolutionsNonProuvees
 	}
 	if m.KnowledgeEscalations > 0 {
 		m.Bootstrap = true
