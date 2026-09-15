@@ -50,8 +50,11 @@ const limiteParDefaut = 25
 // Candidat est une proposition a relire. Jamais une note ecrite.
 type Candidat struct {
 	Source string
-	Ref    string
-	Titre  string
+	// Qualifier distingue la source quand le role en porte plusieurs. Sans
+	// lui, la relecture ne peut pas rattacher un candidat a son depot.
+	Qualifier string
+	Ref       string
+	Titre     string
 	// Signal est la phrase qui a declenche la retenue. Sans elle, ecarter un
 	// faux demande de relire tout le corps.
 	Signal string
@@ -64,9 +67,19 @@ type Candidat struct {
 	Voisins []draft.Voisin
 }
 
+// Ignoree nomme une source declaree que harvest n'a pas lue, et pourquoi. Se
+// taire sur elle presenterait une moisson partielle comme complete — plus
+// dangereux qu'une moisson vide, parce que rien n'invite a verifier.
+type Ignoree struct {
+	Source string
+	Raison string
+}
+
 // Result agrege une passe.
 type Result struct {
-	Source string
+	// Sources liste les sources effectivement lues.
+	Sources  []string
+	Ignorees []Ignoree
 	// Lus est le nombre de traces parcourues, Retenus le nombre de candidats
 	// avant plafonnement — les deux restent visibles pour que le plafond ne
 	// cache pas ce qu'il a coupe.
@@ -93,12 +106,12 @@ var motifPiege = regexp.MustCompile(`(?i)(sinon\b|au lieu de|ne suffit pas|n'exi
 // portent un piege, 38 un pourquoi, et 20 les deux.
 var motifPourquoi = regexp.MustCompile(`(?i)(parce que|car\b|la raison|c'est que|d'ou\b|donc\b|des lors)`)
 
-// Run lit la source d'etat declare du registre et propose des candidats.
+// Run lit les sources d'etat declare du registre et propose des candidats.
 func Run(c *corpus.Corpus, reg *perimeter.Registry, opts Options) (*Result, error) {
 	if !opts.AllowExec {
 		return nil, fmt.Errorf("harvest lit des sources par execution de commandes : relancer avec --allow-exec")
 	}
-	nom, src, err := sourceDeclaree(reg)
+	lues, ignorees, err := sourcesDeclarees(reg)
 	if err != nil {
 		return nil, err
 	}
@@ -106,57 +119,110 @@ func Run(c *corpus.Corpus, reg *perimeter.Registry, opts Options) (*Result, erro
 	if lire == nil {
 		lire = LireGit
 	}
-	elems, err := lire(src.Adapter, src.Endpoint, opts)
-	if err != nil {
-		return nil, err
-	}
-
 	limite := opts.Limite
 	if limite <= 0 {
 		limite = limiteParDefaut
 	}
 
-	res := &Result{Source: nom, Lus: len(elems)}
-	for _, e := range elems {
-		signal, ok := retient(e.Corps)
-		if !ok {
-			continue
+	res := &Result{Ignorees: ignorees}
+	// Les candidats sont d'abord rassembles par source, puis servis en
+	// alternance : un plafond global consomme source par source affamerait
+	// les dernieres, et un plafond par source ferait mentir le chiffre
+	// annonce a l'utilisateur.
+	parSource := make([][]Candidat, 0, len(lues))
+	for _, d := range lues {
+		elems, err := lire(d.Src.Adapter, d.Src.Endpoint, opts)
+		if err != nil {
+			return nil, err
 		}
-		res.Retenus++
-		if len(res.Candidats) >= limite {
-			continue
+		res.Sources = append(res.Sources, d.Nom)
+		res.Lus += len(elems)
+
+		var retenus []Candidat
+		for _, e := range elems {
+			signal, ok := retient(e.Corps)
+			if !ok {
+				continue
+			}
+			res.Retenus++
+			cand := Candidat{
+				Source: d.Nom, Qualifier: d.Qualifier, Ref: e.Ref, Titre: e.Titre,
+				Signal: signal, Corps: strings.TrimSpace(e.Corps),
+				Trust: toujoursProposed,
+			}
+			cand.Voisins = voisinage(c, e, signal, opts.Voisins)
+			retenus = append(retenus, cand)
 		}
-		cand := Candidat{
-			Source: nom, Ref: e.Ref, Titre: e.Titre,
-			Signal: signal, Corps: strings.TrimSpace(e.Corps),
-			Trust: toujoursProposed,
+		parSource = append(parSource, retenus)
+	}
+
+	for tour := 0; len(res.Candidats) < limite; tour++ {
+		servi := false
+		for _, liste := range parSource {
+			if tour >= len(liste) {
+				continue
+			}
+			servi = true
+			res.Candidats = append(res.Candidats, liste[tour])
+			if len(res.Candidats) >= limite {
+				break
+			}
 		}
-		cand.Voisins = voisinage(c, e, signal, opts.Voisins)
-		res.Candidats = append(res.Candidats, cand)
+		if !servi {
+			break
+		}
 	}
 	return res, nil
 }
 
-// sourceDeclaree est la porte de perimetre, et elle est structurelle : harvest
-// ne lit que ce que le registre declare. Un transcript de session, lui,
+// declaree porte une source lisible du role etat.declare.
+type declaree struct {
+	Nom       string
+	Qualifier string
+	Src       perimeter.Source
+}
+
+// sourcesDeclarees est la porte de perimetre, et elle est structurelle :
+// harvest ne lit que ce que le registre declare. Un transcript de session, lui,
 // enregistre tout ce qui s'est dit devant l'agent — perimetre ou non — et
 // demandera une porte explicite avant d'etre lu.
-func sourceDeclaree(reg *perimeter.Registry) (string, perimeter.Source, error) {
+//
+// Toutes les sources git du role sont rendues, pas la premiere : depuis que le
+// role accepte plusieurs sources, n'en lire qu'une revient a moissonner un
+// depot sur N sans le dire.
+func sourcesDeclarees(reg *perimeter.Registry) ([]declaree, []Ignoree, error) {
 	b, ok := reg.RoleMap["etat.declare"]
 	if !ok {
-		return "", perimeter.Source{}, fmt.Errorf("aucun role etat.declare dans le registre : harvest ne lit que des sources declarees")
+		return nil, nil, fmt.Errorf("aucun role etat.declare dans le registre : harvest ne lit que des sources declarees")
 	}
+	var lues []declaree
+	var ignorees []Ignoree
 	for _, liaison := range b {
 		src, ok := reg.Sources[liaison.Source]
-		if !ok || src.Adapter != "git" {
-			continue
+		switch {
+		case !ok:
+			ignorees = append(ignorees, Ignoree{liaison.Source, "source absente du registre"})
+		case src.Adapter != "git":
+			ignorees = append(ignorees, Ignoree{liaison.Source, "adaptateur " + src.Adapter + " : harvest ne sait lire que git"})
+		case src.Endpoint == "":
+			ignorees = append(ignorees, Ignoree{liaison.Source, "aucun endpoint : rien a lire"})
+		default:
+			lues = append(lues, declaree{Nom: liaison.Source, Qualifier: qualifierOuDefaut(liaison), Src: src})
 		}
-		if src.Endpoint == "" {
-			return "", perimeter.Source{}, fmt.Errorf("la source %q n'a pas d'endpoint : rien a lire", liaison.Source)
-		}
-		return liaison.Source, src, nil
 	}
-	return "", perimeter.Source{}, fmt.Errorf("aucune source git rattachee a etat.declare : harvest ne sait lire que git pour l'instant")
+	if len(lues) == 0 {
+		return nil, ignorees, fmt.Errorf("aucune source git lisible rattachee a etat.declare : harvest ne sait lire que git pour l'instant")
+	}
+	return lues, ignorees, nil
+}
+
+// qualifierOuDefaut : un role a source unique n'a pas de qualifier, mais la
+// provenance doit rester nommee dans la sortie.
+func qualifierOuDefaut(b perimeter.Binding) string {
+	if b.Qualifier != "" {
+		return b.Qualifier
+	}
+	return b.Source
 }
 
 func retient(corps string) (string, bool) {

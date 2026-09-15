@@ -1051,7 +1051,11 @@ func cmdHarvest(args []string) error {
 
 func ecrireMoisson(w io.Writer, c *corpus.Corpus, res *harvest.Result) error {
 	o := &sortie{w: w}
-	o.f("source : %s — %d traces lues\ncorpus : %s (%d notes)\n\n", res.Source, res.Lus, c.Root, len(c.Notes))
+	o.f("sources : %s — %d traces lues\ncorpus  : %s (%d notes)\n", strings.Join(res.Sources, ", "), res.Lus, c.Root, len(c.Notes))
+	for _, ig := range res.Ignorees {
+		o.f("! ignoree : %s — %s\n", ig.Source, ig.Raison)
+	}
+	o.f("\n")
 	o.f("%d trace(s) retenue(s)", res.Retenus)
 	if res.Retenus > len(res.Candidats) {
 		o.f(", %d rendue(s) — relancer avec --limite pour le reste", len(res.Candidats))
@@ -1059,7 +1063,7 @@ func ecrireMoisson(w io.Writer, c *corpus.Corpus, res *harvest.Result) error {
 	o.f("\n\n")
 
 	for _, cand := range res.Candidats {
-		o.f("  %s  %s\n", cand.Ref, cand.Titre)
+		o.f("  [%s] %s  %s\n", cand.Qualifier, cand.Ref, cand.Titre)
 		o.f("    signal : %s\n", cand.Signal)
 		if len(cand.Voisins) > 0 {
 			o.f("    deja dans le corpus ? a juger, ce n'est pas un verdict :\n")
