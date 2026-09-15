@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/UnPoilTefal/memory-kit/schema/perimeter.schema.json",
+  "$id": "https://github.com/UnPoilTefal/perimeter/schema/perimeter.schema.json",
   "title": "Perimeter registry",
   "description": "Registre des sources d'un perimetre. Declare quelle brique sert quel role, et comment prouver que chaque source repond encore.",
   "type": "object",

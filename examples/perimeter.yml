@@ -1,4 +1,4 @@
-# Registre des sources d'un perimetre — https://github.com/UnPoilTefal/memory-kit
+# Registre des sources d'un perimetre — https://github.com/UnPoilTefal/perimeter
 #
 # Un role du modele de readiness = une brique concrete. La boite reference et
 # sonde ces briques ; elle n'en recopie jamais le contenu. Ce qui est derivable

@@ -12,7 +12,7 @@ import (
 )
 
 // ConfigFile est le nom du fichier de configuration a la racine d'un corpus.
-const ConfigFile = ".memory-kit.yml"
+const ConfigFile = ".corpus.yml"
 
 // Config decrit un corpus. Les valeurs par defaut correspondent a la
 // disposition d'un repertoire de memoire Claude Code (notes a plat, index
@@ -50,7 +50,7 @@ type Config struct {
 	} `yaml:"verify"`
 }
 
-// DefaultConfig rend la configuration appliquee en l'absence de .memory-kit.yml.
+// DefaultConfig rend la configuration appliquee en l'absence de .corpus.yml.
 func DefaultConfig() *Config {
 	c := &Config{Version: 1}
 	c.Corpus.Path = "."
@@ -89,7 +89,7 @@ type IndexEntry struct {
 	Hook   string
 }
 
-// LoadConfig lit .memory-kit.yml a la racine donnee, ou rend les defauts.
+// LoadConfig lit .corpus.yml a la racine donnee, ou rend les defauts.
 func LoadConfig(root string) (*Config, error) {
 	cfg := DefaultConfig()
 	raw, err := os.ReadFile(filepath.Join(root, ConfigFile))

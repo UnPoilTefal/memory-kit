@@ -46,13 +46,13 @@ jobs:
       # Binaire compile plutot que « go run » : ce dernier ne propage pas le
       # code de sortie du programme, il sort en 1 quel qu'il soit — ce qui
       # rendrait invisible la verification des verdicts ci-dessous.
-      - run: go build -o bin/memctl ./cmd/memctl
+      - run: go build -o bin/perctl ./cmd/perctl
 
-      - run: ./bin/memctl lint examples/corpus --format github --strict
+      - run: ./bin/perctl lint examples/corpus --format github --strict
 
       # Le registre d'exemple est la documentation executable du format :
       # roles pourvus et sources sondables.
-      - run: ./bin/memctl perimeter examples/perimeter.yml
+      - run: ./bin/perctl perimeter examples/perimeter.yml
 
       # La porte s'applique a ses propres exemples. Le verdict attendu est
       # verifie par le code de sortie : 0 produire, 1 instruire, 2 rendre.
@@ -61,7 +61,7 @@ jobs:
           attendu() {
             local fichier=$1 code=$2; shift 2
             set +e
-            ./bin/memctl gate "$fichier" --no-record "$@" >/dev/null
+            ./bin/perctl gate "$fichier" --no-record "$@" >/dev/null
             local obtenu=$?
             set -e
             if [ "$obtenu" -ne "$code" ]; then

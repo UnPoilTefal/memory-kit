@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/UnPoilTefal/memory-kit/internal/corpus"
-	"github.com/UnPoilTefal/memory-kit/internal/report"
+	"github.com/UnPoilTefal/perimeter/internal/corpus"
+	"github.com/UnPoilTefal/perimeter/internal/report"
 )
 
 // rules rend, par regle, les fichiers concernes.

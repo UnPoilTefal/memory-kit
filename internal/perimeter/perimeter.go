@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/UnPoilTefal/memory-kit/schema"
+	"github.com/UnPoilTefal/perimeter/schema"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"golang.org/x/text/language"
 	"golang.org/x/text/message"

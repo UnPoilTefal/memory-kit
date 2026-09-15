@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/UnPoilTefal/memory-kit/internal/corpus"
-	"github.com/UnPoilTefal/memory-kit/internal/perimeter"
+	"github.com/UnPoilTefal/perimeter/internal/corpus"
+	"github.com/UnPoilTefal/perimeter/internal/perimeter"
 )
 
 func load(t *testing.T, root string) *corpus.Corpus {
@@ -233,7 +233,7 @@ Corps.
 func corpusAvec(t *testing.T, notes map[string]string) string {
 	t.Helper()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, ".memory-kit.yml"), []byte("version: 1\ncorpus:\n  index: \"\"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, ".corpus.yml"), []byte("version: 1\ncorpus:\n  index: \"\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for name, body := range notes {

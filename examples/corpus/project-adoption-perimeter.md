@@ -1,5 +1,5 @@
 ---
-name: project-adoption-memory-kit
+name: project-adoption-perimeter
 description: "L'adoption commence par le lint en CI seul ; les preuves ne s'ajoutent qu'ensuite, en partant des faits qui ont deja coute un incident"
 metadata:
   type: project
@@ -10,7 +10,7 @@ metadata:
 
 **Etat.** Sequence d'adoption retenue pour une equipe qui part d'un corpus existant.
 
-1. `memctl lint` en CI, sans `--strict`. Il ne casse que sur les erreurs structurelles,
+1. `perctl lint` en CI, sans `--strict`. Il ne casse que sur les erreurs structurelles,
    ce qui rend la premiere pull request acceptable.
 2. Resorber les orphelins d'index. C'est le gain le plus immediat et le plus visible :
    des notes deja ecrites redeviennent accessibles.
