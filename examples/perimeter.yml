@@ -17,8 +17,11 @@ roles:
     source: memoire
   etat.declare:
     source: depots
+  # Un role porte plusieurs sources quand la realite en compte plusieurs.
+  # Chacune doit alors etre qualifiee : sans cela, rien ne dit laquelle une
+  # preuve interroge.
   etat.reel:
-    source: cluster
+    - { source: cluster, qualifier: production }
 
 sources:
   specs:

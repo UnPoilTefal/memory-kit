@@ -20,22 +20,22 @@
       "additionalProperties": false,
       "properties": {
         "intention.spec": {
-          "$ref": "#/$defs/binding"
+          "$ref": "#/$defs/bindings"
         },
         "intention.tickets": {
-          "$ref": "#/$defs/binding"
+          "$ref": "#/$defs/bindings"
         },
         "contrainte.decisions": {
-          "$ref": "#/$defs/binding"
+          "$ref": "#/$defs/bindings"
         },
         "contrainte.memoire": {
-          "$ref": "#/$defs/binding"
+          "$ref": "#/$defs/bindings"
         },
         "etat.declare": {
-          "$ref": "#/$defs/binding"
+          "$ref": "#/$defs/bindings"
         },
         "etat.reel": {
-          "$ref": "#/$defs/binding"
+          "$ref": "#/$defs/bindings"
         }
       }
     },
@@ -66,6 +66,11 @@
         "note": {
           "type": "string",
           "maxLength": 200
+        },
+        "qualifier": {
+          "type": "string",
+          "maxLength": 60,
+          "description": "Distingue plusieurs instances d'un meme role : « production », « recette ». Une brique operee sur plusieurs environnements a autant d'etats reels que d'environnements."
         }
       }
     },
@@ -225,6 +230,21 @@
           "minimum": 1
         }
       }
+    },
+    "bindings": {
+      "description": "Un role porte une source, ou plusieurs quand la realite en compte plusieurs.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/binding"
+        },
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/binding"
+          }
+        }
+      ]
     }
   }
 }
