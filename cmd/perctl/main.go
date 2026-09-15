@@ -151,9 +151,15 @@ func resolveCorpus(path, regPath string) (*corpus.Corpus, *perimeter.Registry, e
 	if err != nil {
 		return nil, nil, err
 	}
-	_, root, policy, err := reg.CorpusSource()
+	nom, root, policy, err := reg.CorpusSource()
 	if err != nil {
 		return nil, nil, err
+	}
+	// Un corpus declare mais absent est le premier mur que rencontre un
+	// nouvel utilisateur, juste apres un « perctl init » reussi. L'erreur de
+	// la bibliotheque standard est exacte et muette sur la cause.
+	if st, errStat := os.Stat(root); errStat != nil || !st.IsDir() {
+		return nil, nil, fmt.Errorf("%s", perimeter.CheminAbsent(nom, "contrainte.memoire", root))
 	}
 	c, err := corpus.LoadWith(root, corpus.ConfigFromPolicy(policy))
 	return c, reg, err
@@ -383,8 +389,9 @@ func cmdPerimeter(args []string) error {
 		return fail(1)
 	}
 
-	fmt.Println("\n✓ registre coherent : chaque role est pourvu et chaque source sondable")
-	fmt.Println("  la sonde elle-meme se rejoue avec : perctl verify <corpus> --perimeter " + root + " --probe-sources --allow-exec")
+	fmt.Println("\n✓ registre coherent : chaque role est pourvu, et chaque source declare une sonde")
+	fmt.Println("  declarer une sonde n'est pas la passer — les rejouer :")
+	fmt.Println("    perctl verify <corpus> --perimeter " + root + " --probe-sources --allow-exec")
 
 	// La coherence est binaire, la maturite ne l'est pas. Ces remarques
 	// n'invalident rien : un registre qui en porte reste utilisable, mais on

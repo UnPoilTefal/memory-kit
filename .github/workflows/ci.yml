@@ -134,6 +134,33 @@ jobs:
             exit 1
           fi
 
+      # Le parcours d'un nouvel utilisateur : init dans un dossier vide, puis
+      # les premieres commandes. C'est ce chemin qui a produit les defauts
+      # remontes de l'exterieur — aucune verification ne le prenait, parce
+      # qu'elles partent toutes d'un perimetre deja configure.
+      - name: le premier contact ne rend pas d'erreur brute
+        run: |
+          mkdir -p /tmp/neuf && cd /tmp/neuf
+          "$GITHUB_WORKSPACE/bin/perctl" init < /dev/null > /dev/null
+          # Le corpus declare n'existe pas encore : le message doit nommer la
+          # source et le role, pas rendre un « lstat: no such file ».
+          sortie=$("$GITHUB_WORKSPACE/bin/perctl" lint 2>&1 || true)
+          for attendu in "contrainte.memoire" "corriger son endpoint"; do
+            case "$sortie" in
+              *"$attendu"*) ;;
+              *) echo "::error::le diagnostic ne cite pas $attendu : $sortie"; exit 1 ;;
+            esac
+          done
+          case "$sortie" in
+            *lstat*) echo "::error::l'erreur brute de la bibliotheque remonte encore"; exit 1 ;;
+          esac
+          # Un endpoint qui n'est pas un depot git doit etre nomme comme tel.
+          mkdir -p memory && printf '# Index\n' > memory/MEMORY.md
+          sortie=$("$GITHUB_WORKSPACE/bin/perctl" harvest --allow-exec 2>&1 || true)
+          case "$sortie" in
+            *"exit status"*) echo "::error::le code de sortie de git remonte brut : $sortie"; exit 1 ;;
+          esac
+
       # Le registre doit etre adressable autrement que par --perimeter : une
       # session d'agent ou un job de CI exporte une variable plus facilement
       # qu'il ne passe un chemin a chaque commande.

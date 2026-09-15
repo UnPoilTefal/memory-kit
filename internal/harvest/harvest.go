@@ -133,7 +133,7 @@ func Run(c *corpus.Corpus, reg *perimeter.Registry, opts Options) (*Result, erro
 	for _, d := range lues {
 		elems, err := lire(d.Src.Adapter, d.Src.Endpoint, opts)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("source %q : %w", d.Nom, err)
 		}
 		res.Sources = append(res.Sources, d.Nom)
 		res.Lus += len(elems)
@@ -266,6 +266,11 @@ func voisinage(c *corpus.Corpus, e Element, signal string, plafond int) []draft.
 func LireGit(adapter, endpoint string, opts Options) ([]Element, error) {
 	if adapter != "git" {
 		return nil, fmt.Errorf("adaptateur %q non gere par harvest", adapter)
+	}
+	// Verifier avant de lire : sans ca, « exit status 128 » remonte tel quel
+	// et ne dit ni quelle source est en cause ni pourquoi.
+	if err := perimeter.EstDepotGit(endpoint); err != nil {
+		return nil, err
 	}
 	args := []string{"-C", endpoint, "log", "--no-merges", "--format=%H%x1e%s%x1e%b%x1f"}
 	if opts.Depuis != "" {
