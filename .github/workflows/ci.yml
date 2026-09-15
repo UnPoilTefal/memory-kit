@@ -134,6 +134,22 @@ jobs:
             exit 1
           fi
 
+      # « harvest » lit par execution : il doit refuser sans --allow-exec, et
+      # ne jamais rien ecrire quand il s'execute. Les deux, pas l'un ou l'autre.
+      - name: harvest refuse sans --allow-exec et n'ecrit rien
+        run: |
+          if ./bin/perctl harvest --perimeter examples/perimeter.yml; then
+            echo "::error::harvest aurait du refuser sans --allow-exec"
+            exit 1
+          fi
+          avant=$(git status --porcelain | wc -l)
+          ./bin/perctl harvest --perimeter examples/perimeter.yml --allow-exec --limite 3 > /dev/null
+          apres=$(git status --porcelain | wc -l)
+          if [ "$avant" != "$apres" ]; then
+            echo "::error::harvest a modifie l'arbre de travail"
+            exit 1
+          fi
+
       # « propose » ne doit jamais rien ecrire sans --write.
       - name: Propose sans effet de bord
         run: |

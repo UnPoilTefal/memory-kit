@@ -25,6 +25,7 @@ import (
 	"github.com/UnPoilTefal/perimeter/internal/claim"
 	"github.com/UnPoilTefal/perimeter/internal/corpus"
 	"github.com/UnPoilTefal/perimeter/internal/draft"
+	"github.com/UnPoilTefal/perimeter/internal/harvest"
 	"github.com/UnPoilTefal/perimeter/internal/lint"
 	"github.com/UnPoilTefal/perimeter/internal/perimeter"
 	"github.com/UnPoilTefal/perimeter/internal/probediff"
@@ -48,6 +49,7 @@ const usage = `perctl — savoir si un agent peut agir sur un perimetre
   perctl readiness         etat de sortie de demarrage, et regime qui en decoule
   perctl propose [chemin]  propose une sonde pour les notes qui n'en portent pas
   perctl draft  [fichier]  juge un brouillon avant de l'ecrire (« - » ou rien : entree standard)
+  perctl harvest           propose des candidats depuis les traces deja la (--allow-exec)
   perctl init   [chemin]   ecrit un .corpus.yml
   perctl schema            ecrit le JSON Schema sur la sortie standard
   perctl version
@@ -78,6 +80,8 @@ func main() {
 		err = cmdPropose(os.Args[2:])
 	case "draft":
 		err = cmdDraft(os.Args[2:])
+	case "harvest":
+		err = cmdHarvest(os.Args[2:])
 	case "init":
 		err = cmdInit(os.Args[2:])
 	case "schema":
@@ -1001,4 +1005,63 @@ func draftJSON(n *corpus.Note, v *draft.Verdict) draftSortie {
 		out.Voisins = append(out.Voisins, draftVoisin{Note: vo.Note.Rel, Score: vo.Score, Termes: vo.Termes})
 	}
 	return out
+}
+
+// cmdHarvest amorce un corpus depuis les traces qu'une equipe possede deja.
+// Il ne produit que des propositions a relire — jamais une ecriture.
+func cmdHarvest(args []string) error {
+	fs := flag.NewFlagSet("harvest", flag.ExitOnError)
+	regPath := fs.String("perimeter", "", "registre a utiliser (defaut : recherche en remontant)")
+	depuis := fs.String("depuis", "", "borne l'historique lu (revision ou date, au sens de git)")
+	limite := fs.Int("limite", 0, "plafond de candidats rendus (defaut 25)")
+	voisins := fs.Int("voisins", 0, "notes proches rendues par candidat (defaut 3)")
+	allow := fs.Bool("allow-exec", false, "autoriser l'execution des commandes de lecture")
+	format := fs.String("format", "human", "human | json")
+	_ = fs.Parse(trimPositional(args))
+
+	c, reg, err := resolveCorpus("", *regPath)
+	if err != nil {
+		return err
+	}
+	if reg == nil {
+		return fmt.Errorf("harvest a besoin d'un registre : il ne lit que des sources declarees")
+	}
+	res, err := harvest.Run(c, reg, harvest.Options{
+		AllowExec: *allow, Depuis: *depuis, Limite: *limite, Voisins: *voisins,
+	})
+	if err != nil {
+		return err
+	}
+	if *format == "json" {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(res)
+	}
+	return ecrireMoisson(os.Stdout, c, res)
+}
+
+func ecrireMoisson(w io.Writer, c *corpus.Corpus, res *harvest.Result) error {
+	o := &sortie{w: w}
+	o.f("source : %s — %d traces lues\ncorpus : %s (%d notes)\n\n", res.Source, res.Lus, c.Root, len(c.Notes))
+	o.f("%d trace(s) retenue(s)", res.Retenus)
+	if res.Retenus > len(res.Candidats) {
+		o.f(", %d rendue(s) — relancer avec --limite pour le reste", len(res.Candidats))
+	}
+	o.f("\n\n")
+
+	for _, cand := range res.Candidats {
+		o.f("  %s  %s\n", cand.Ref, cand.Titre)
+		o.f("    signal : %s\n", cand.Signal)
+		if len(cand.Voisins) > 0 {
+			o.f("    deja dans le corpus ? a juger, ce n'est pas un verdict :\n")
+			for _, v := range cand.Voisins {
+				o.f("      %.2f  %s\n", v.Score, v.Note.Rel)
+			}
+		}
+		o.f("\n")
+	}
+	o.f("tous les candidats sont en trust: proposed — rien n'a ete ecrit.\n")
+	o.f("les trois questions du portillon restent a poser sur chacun :\n")
+	o.f("non re-derivable ? non ephemere ? comptera dans trois mois ?\n")
+	return o.err
 }
