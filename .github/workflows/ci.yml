@@ -64,6 +64,28 @@ jobs:
           fi
           echo "  ✓ aucun fichier modifie"
 
+      # Le garde-fou d'execution doit refuser une PR venue d'un fork, et
+      # accepter le meme corpus hors de ce contexte.
+      - name: Garde-fou d'execution
+        run: |
+          set -euo pipefail
+          cat > /tmp/ev.json <<'J'
+          {"pull_request":{"head":{"repo":{"full_name":"tiers/perimeter"}}},"repository":{"full_name":"UnPoilTefal/perimeter"}}
+          J
+          set +e
+          GITHUB_ACTIONS=true GITHUB_EVENT_NAME=pull_request GITHUB_EVENT_PATH=/tmp/ev.json \
+            ./bin/perctl verify examples/corpus --allow-exec >/dev/null 2>&1
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "::error::perctl a execute des preuves sur une pull request de fork"
+            exit 1
+          fi
+          echo "  ✓ refus sur une contribution externe (code $code)"
+
+      # « --diff-probes » ne doit rien executer, et ne montrer que les preuves.
+      - run: ./bin/perctl verify examples/corpus --diff-probes HEAD
+
       # Le gabarit d'init doit passer la validation sans retouche.
       - name: Gabarit d'init
         run: |

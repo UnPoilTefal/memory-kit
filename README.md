@@ -242,6 +242,39 @@ c'est ce qui rend la preuve exécutable — et c'est une surface d'attaque.
 
 `perctl lint` ne lance jamais rien : la CI de pull request peut l'utiliser sans réserve.
 
+### Le garde-fou est dans l'outil, pas dans la documentation
+
+`--allow-exec` **refuse de s'exécuter** quand il reconnaît une contribution venue de l'extérieur :
+une pull request GitHub ou une merge request GitLab dont la source n'est pas le dépôt lui-même.
+
+Le doute ne profite pas à l'exécution : sur un événement de pull request, il faut pouvoir
+*confirmer* que la source est le dépôt. Charge d'événement illisible, dépôts non nommés, variable
+absente — tout cela vaut refus.
+
+```
+contexte : GitHub Actions, pull request
+pull request issue de tiers/produit, distinct de org/produit : le contenu vient de l'extérieur
+```
+
+Passer outre demande `--allow-exec-untrusted`, qu'il faut écrire sciemment.
+
+Hors intégration continue, ou sur un `push`, un `schedule`, un déclenchement manuel, rien ne
+change. Une CI non reconnue sans indication d'événement n'est pas refusée : on n'invente pas un
+risque, et on ne casse pas les travaux nocturnes.
+
+### Voir seulement ce qui exécute du code
+
+```bash
+perctl verify <corpus> --diff-probes main
+```
+
+`CODEOWNERS` fait relire le **fichier entier**. Cette commande ne rapporte que les notes dont le
+**bloc de preuve** a changé — la seule portion du diff qui finira par exécuter quelque chose. Elle
+n'exécute rien, donc elle est faite pour tourner là où l'exécution est justement interdite.
+
+Une note dont seul le texte a changé n'apparaît pas. Reformuler le commentaire d'une preuve non
+plus : c'est la commande et son attente qui comptent.
+
 ---
 
 ## Le registre de périmètre
