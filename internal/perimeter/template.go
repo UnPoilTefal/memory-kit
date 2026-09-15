@@ -45,8 +45,9 @@ func regexpQuote(s string) string {
 	return r.Replace(s)
 }
 
-// reliabilityFor devine le regime de fiabilite : ce qui se lit dans un fichier
+// ReliabilityFor devine le regime de fiabilite : ce qui se lit dans un fichier
 // versionne porte sa fraicheur, ce qui s'interroge a distance doit se mesurer.
+// Le champ est consulte par Maturite() — un etat.reel declare y est signale.
 func ReliabilityFor(adapter string) string {
 	switch adapter {
 	case "files", "git":
@@ -66,7 +67,10 @@ func Template() string {
 	for _, h := range RoleHints {
 		fmt.Fprintf(&b, "  %-22s { source: %s }\n", h.Role+":", strings.SplitN(h.Role, ".", 2)[1])
 	}
-	b.WriteString("\nsources:\n")
+	b.WriteString("\n# reliability : declared = la source porte sa propre fraicheur ; measured =\n")
+	b.WriteString("# l'agent doit la constater. « perctl perimeter » s'en sert : un etat.reel\n")
+	b.WriteString("# declare est signale, parce que le reel non constate rend l'ecart entre les\n")
+	b.WriteString("# deux verites inobservable.\nsources:\n")
 	for _, h := range RoleHints {
 		name := strings.SplitN(h.Role, ".", 2)[1]
 		fmt.Fprintf(&b, "  # %s\n  %s:\n    adapter: %s\n    endpoint: %q\n    reliability: %s\n",

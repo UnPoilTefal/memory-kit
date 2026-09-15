@@ -428,6 +428,33 @@ Préférable à une commande écrite en dur dès qu'un périmètre est déclaré
 changement d'outil, la commande non. Changer de traqueur de tickets devient une ligne du
 registre au lieu d'une reprise de toutes les notes.
 
+### La maturité du registre — au-delà de valide / invalide
+
+`perctl perimeter` rend deux choses distinctes, et il ne faut pas les confondre.
+
+**La cohérence est binaire** : chaque rôle est pourvu, chaque source est sondable, aucun
+identifiant n'est en clair. Elle passe ou elle échoue.
+
+**La maturité ne l'est pas.** Un registre peut être parfaitement valide et pourtant ne pas
+permettre grand-chose. Les remarques de maturité le disent **sans invalider** :
+
+| motif | ce qu'il signale |
+|---|---|
+| `etat-reel-non-mesure` | `etat.reel` pointe une source `declared` — le réel n'est pas constaté, l'écart entre les deux vérités devient inobservable |
+| `familles-confondues` | une source sert `intention` **et** `etat` — comparer ce qui est voulu à ce qui est n'apprend plus rien |
+| `sonde-d-existence` | la sonde se limite à `test -d` ou `true` — elle prouve que la source est là, pas qu'elle dit ce qu'on attend d'elle |
+
+⚠️ **Ces remarques ne sont pas des erreurs, et c'est délibéré.** Les rendre bloquantes
+rendrait invalide tout registre existant, et ferait désactiver la vérification en entier.
+
+⚠️ **Il n'y a pas de score.** Ce projet a remplacé les scores de confiance par des tests
+falsifiables, et a constaté trois fois qu'un signal lexical *classe sans classifier*. Un
+« registre à 78 % » inviterait à optimiser le chiffre plutôt que le périmètre. Chaque remarque
+porte un motif nommable et **sa conséquence** — et le silence quand il n'y a rien à dire.
+
+C'est aussi ce qui donne enfin un rôle au champ `reliability`, jusque-là exigé par le schéma et
+consulté nulle part.
+
 ### Deux invariants, appliqués par le schéma et non par la discipline
 
 **Aucun identifiant en clair.** Le champ `credential` n'accepte qu'une référence

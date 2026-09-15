@@ -375,16 +375,28 @@ func cmdPerimeter(args []string) error {
 	fmt.Printf("%s — %d sources, %d roles sur %d pourvus\n",
 		root, len(reg.Sources), len(Roles(reg)), len(perimeter.Roles))
 
-	if len(issues) == 0 {
-		fmt.Println("\n✓ registre coherent : chaque role est pourvu et chaque source sondable")
-		fmt.Println("  la sonde elle-meme se rejoue avec : perctl verify <corpus> --perimeter " + root + " --probe-sources --allow-exec")
-		return nil
+	if len(issues) > 0 {
+		fmt.Printf("\n%d constats :\n", len(issues))
+		for _, i := range issues {
+			fmt.Printf("  - %s\n", i)
+		}
+		return fail(1)
 	}
-	fmt.Printf("\n%d constats :\n", len(issues))
-	for _, i := range issues {
-		fmt.Printf("  - %s\n", i)
+
+	fmt.Println("\n✓ registre coherent : chaque role est pourvu et chaque source sondable")
+	fmt.Println("  la sonde elle-meme se rejoue avec : perctl verify <corpus> --perimeter " + root + " --probe-sources --allow-exec")
+
+	// La coherence est binaire, la maturite ne l'est pas. Ces remarques
+	// n'invalident rien : un registre qui en porte reste utilisable, mais on
+	// en tirera moins. Les rendre bloquantes rendrait invalide tout registre
+	// existant et ferait desactiver la verification en entier.
+	if rs := reg.Maturite(); len(rs) > 0 {
+		fmt.Printf("\n%d remarque(s) de maturite — le registre reste valide :\n", len(rs))
+		for _, r := range rs {
+			fmt.Printf("  ~ [%s] %s\n", r.Motif, r)
+		}
 	}
-	return fail(1)
+	return nil
 }
 
 // Roles rend les roles effectivement pourvus par une source existante.
