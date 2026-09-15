@@ -68,7 +68,11 @@ const CorpusRole = "contrainte.memoire"
 // la source qui porte ce corpus, et nulle part ailleurs : une equipe n'ecrit
 // qu'un fichier.
 type CorpusPolicy struct {
-	Index                string   `yaml:"index"`
+	// Index est un pointeur : une chaine vide dit « ce corpus n'a pas
+	// d'index », et c'est different d'une clé absente, qui doit prendre le
+	// defaut. Les confondre desactivait l'index des qu'un bloc corpus etait
+	// declare sans cette cle.
+	Index                *string  `yaml:"index"`
 	Exclude              []string `yaml:"exclude"`
 	Types                []string `yaml:"types"`
 	MaxBodyWords         int      `yaml:"max_body_words"`

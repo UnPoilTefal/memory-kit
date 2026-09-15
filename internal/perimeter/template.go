@@ -84,19 +84,29 @@ func Template() string {
 // partagent, sinon l'un des deux derive sans que rien ne le signale — c'est
 // arrive en ajoutant index_hook.
 const CorpusPolicyBloc = `    # Politique du corpus — lue par « perctl lint ».
+    #
+    # Seules les lignes actives ci-dessous sont necessaires : tout ce qui est
+    # commente montre le defaut applique. Le reecrire ne change rien, mais le
+    # fige — le corpus ne suivrait plus l'evolution de l'outil.
     corpus:
       index: MEMORY.md
-      # Qui ecrit l'accroche d'index. derived : elle reprend la description,
-      # et « index --sync » la regenere. authored : elle est redigee pour un
+      # Qui ecrit l'accroche d'index. derived : elle reprend la description, et
+      # « index --sync » la regenere. authored : elle est redigee pour un
       # lecteur humain, index-drift ne s'applique pas et « --sync » refuse.
-      index_hook: derived
-      max_body_words: 400
-      require_owner: false
-      # Une note sans date est hors de portee de toute peremption : par
-      # defaut c'est une erreur. Passer a false pour un corpus qui ne peut
-      # pas s'y plier tout de suite.
-      require_date: true
-      staleness:
-        review_after_days: 180
-        max_stale_ratio: 0.15
+      # index_hook: derived
+      #
+      # Budget de mots par note. Un fait par note : au-dela, scinder.
+      # max_body_words: 400
+      #
+      # Exiger un proprietaire. Indispensable des qu'on est plusieurs.
+      # require_owner: false
+      #
+      # staleness:
+      #   review_after_days: 180
+      #   max_stale_ratio: 0.15
+      #
+      # Corpus voisins : sans eux, un lien vers un wiki passe pour casse.
+      # links:
+      #   external_roots:
+      #     - "/chemin/vers/le/wiki"
 `
