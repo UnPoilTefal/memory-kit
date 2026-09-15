@@ -261,6 +261,9 @@ func cmdIndex(args []string) error {
 		}
 	}
 	if *sync {
+		if err := corpus.SyncIndexAutorise(c); err != nil {
+			return err
+		}
 		return syncIndex(c)
 	}
 	if len(missing) == 0 {
@@ -291,8 +294,11 @@ func cmdIndex(args []string) error {
 	if err := os.WriteFile(c.IndexPath, []byte(b.String()), 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("%d entrees ajoutees a %s — a relire : le titre et l'accroche viennent du frontmatter\n",
-		len(missing), c.Config.Corpus.Index)
+	suite := "a relire : le titre et l'accroche viennent du frontmatter"
+	if c.IndexHookAuthore() {
+		suite = "l'accroche generee n'est qu'un point de depart : ce corpus les ecrit a la main"
+	}
+	fmt.Printf("%d entrees ajoutees a %s — %s\n", len(missing), c.Config.Corpus.Index, suite)
 	return nil
 }
 
@@ -793,8 +799,7 @@ func askRegistry(in io.Reader) (string, error) {
 			name, adapter, endpoint, perimeter.ReliabilityFor(adapter))
 		sources.WriteString(perimeter.ProbeFor(adapter, endpoint))
 		if h.Role == perimeter.CorpusRole {
-			sources.WriteString("    # Politique du corpus — lue par « perctl lint ».\n")
-			sources.WriteString("    corpus:\n      index: MEMORY.md\n      max_body_words: 400\n      require_owner: false\n      staleness:\n        review_after_days: 180\n        max_stale_ratio: 0.15\n")
+			sources.WriteString(perimeter.CorpusPolicyBloc)
 		}
 	}
 	return "# Registre du perimetre — https://github.com/UnPoilTefal/perimeter\n" +

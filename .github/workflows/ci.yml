@@ -52,6 +52,31 @@ jobs:
       - run: ./bin/perctl lint --perimeter examples/perimeter.yml --format github --strict
       # L'usage ad hoc, sur un repertoire hors de tout perimetre declare.
       - run: ./bin/perctl lint examples/corpus --strict
+      # En regime authored, « index --sync » doit refuser ET ne rien ecrire.
+      # Taire index-drift sans desarmer la commande laisserait la config dire
+      # une chose et l'outil rester capable du contraire.
+      - name: index --sync refuse en regime authored
+        run: |
+          cp examples/perimeter.yml /tmp/authored.yml
+          python3 - <<'PY'
+          s = open('/tmp/authored.yml').read()
+          s = s.replace('      index: MEMORY.md', '      index: MEMORY.md\n      index_hook: authored', 1)
+          open('/tmp/authored.yml', 'w').write(s)
+          PY
+          avant=$(git status --porcelain examples/ | wc -l)
+          if ./bin/perctl index --sync --perimeter /tmp/authored.yml; then
+            echo "::error::index --sync aurait du refuser en regime authored"
+            exit 1
+          fi
+          apres=$(git status --porcelain examples/ | wc -l)
+          if [ "$avant" != "$apres" ]; then
+            echo "::error::index --sync a modifie l'index alors qu'il refusait"
+            exit 1
+          fi
+          # En derived, la commande reste operante.
+          ./bin/perctl index --sync --perimeter examples/perimeter.yml > /dev/null
+          git checkout -- examples/
+
       # « propose » ne doit jamais rien ecrire sans --write.
       - name: Propose sans effet de bord
         run: |

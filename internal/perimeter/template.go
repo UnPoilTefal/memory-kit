@@ -73,9 +73,26 @@ func Template() string {
 			h.Question, name, h.Adapter, h.Endpoint, ReliabilityFor(h.Adapter))
 		b.WriteString(ProbeFor(h.Adapter, h.Endpoint))
 		if h.Role == CorpusRole {
-			b.WriteString("    # Politique du corpus — lue par « perctl lint ».\n")
-			b.WriteString("    corpus:\n      index: MEMORY.md\n      max_body_words: 400\n      require_owner: false\n      staleness:\n        review_after_days: 180\n        max_stale_ratio: 0.15\n")
+			b.WriteString(CorpusPolicyBloc)
 		}
 	}
 	return b.String()
 }
+
+// CorpusPolicyBloc est la politique de corpus ecrite dans un registre neuf.
+// Une seule copie : le gabarit non interactif et l'assistant « init » la
+// partagent, sinon l'un des deux derive sans que rien ne le signale — c'est
+// arrive en ajoutant index_hook.
+const CorpusPolicyBloc = `    # Politique du corpus — lue par « perctl lint ».
+    corpus:
+      index: MEMORY.md
+      # Qui ecrit l'accroche d'index. derived : elle reprend la description,
+      # et « index --sync » la regenere. authored : elle est redigee pour un
+      # lecteur humain, index-drift ne s'applique pas et « --sync » refuse.
+      index_hook: derived
+      max_body_words: 400
+      require_owner: false
+      staleness:
+        review_after_days: 180
+        max_stale_ratio: 0.15
+`

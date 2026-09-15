@@ -1,6 +1,7 @@
 package corpus
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -34,6 +35,18 @@ type Config struct {
 			MaxStaleRatio   float64 `yaml:"max_stale_ratio"`
 		} `yaml:"staleness"`
 		RequireOwner bool `yaml:"require_owner"`
+
+		// IndexHook declare qui ecrit l'accroche d'index. « derived » :
+		// elle reprend la description, et toute divergence est une
+		// derive. « authored » : elle est ecrite a la main pour un
+		// lecteur humain, et n'a aucune raison de coincider.
+		//
+		// Les deux lecteurs different — la description sert a l'agent
+		// qui decide s'il ouvre la note, l'accroche sert a l'humain qui
+		// parcourt l'index. Les forcer egales optimise pour un seul des
+		// deux ; le choix appartient a l'equipe, rien ne permet de le
+		// deduire du corpus.
+		IndexHook string `yaml:"index_hook"`
 	} `yaml:"policy"`
 
 	// Links declare les corpus voisins vers lesquels un lien est legitime.
@@ -59,6 +72,7 @@ func DefaultConfig() *Config {
 	c.Policy.MaxBodyWords = 400
 	c.Policy.Staleness.ReviewAfterDays = 180
 	c.Policy.Staleness.MaxStaleRatio = 0.15
+	c.Policy.IndexHook = IndexHookDerived
 	// Un lien commencant par / designe une commande ou une skill, pas une note.
 	c.Links.IgnorePrefixes = []string{"/"}
 	c.Verify.TimeoutSeconds = 30
@@ -108,6 +122,9 @@ func ConfigFromPolicy(p *perimeter.CorpusPolicy) *Config {
 		cfg.Policy.MaxBodyWords = p.MaxBodyWords
 	}
 	cfg.Policy.RequireOwner = p.RequireOwner
+	if p.IndexHook != "" {
+		cfg.Policy.IndexHook = p.IndexHook
+	}
 	if p.Staleness.ReviewAfterDays > 0 {
 		cfg.Policy.Staleness.ReviewAfterDays = p.Staleness.ReviewAfterDays
 	}
@@ -272,4 +289,28 @@ func (c *Corpus) ByName() map[string]*Note {
 		}
 	}
 	return m
+}
+
+// Regimes d'accroche d'index. Voir Config.Policy.IndexHook.
+const (
+	IndexHookDerived  = "derived"
+	IndexHookAuthored = "authored"
+)
+
+// IndexHookAuthore dit si les accroches de ce corpus sont ecrites a la main.
+func (c *Corpus) IndexHookAuthore() bool {
+	return c.Config != nil && c.Config.Policy.IndexHook == IndexHookAuthored
+}
+
+// SyncIndexAutorise garde la regeneration des accroches. En regime authored
+// elle detruirait du travail humain : « perctl index --sync » reecrirait
+// d'un coup toutes les accroches a partir des descriptions.
+//
+// Taire la regle sans desarmer la commande ne suffirait pas — la config
+// dirait une chose et l'outil resterait capable du contraire.
+func SyncIndexAutorise(c *Corpus) error {
+	if c.IndexHookAuthore() {
+		return fmt.Errorf("policy.index_hook vaut \"authored\" : les accroches sont ecrites a la main, les regenerer les ecraserait")
+	}
+	return nil
 }
