@@ -66,10 +66,18 @@ homebrew_casks:
     license: "MIT"
     hooks:
       post:
-        # Un binaire telecharge est mis en quarantaine par Gatekeeper, ce qui
-        # le rend inexecutable sans intervention de l'utilisateur.
+        # Gatekeeper met en quarantaine un binaire telecharge non signe, ce qui
+        # le rend inexecutable a la premiere invocation. La levee est un besoin
+        # macOS : sur Linux la notion n'existe pas.
+        #
+        # Garder sur l'OS, jamais sur le code de sortie de xattr : sous Linux
+        # le binaire n'existe pas, donc l'appel echoue avant qu'il y ait un
+        # code a tester, postflight avorte et Homebrew purge l'installation.
+        # L'ancienne condition protegeait d'un xattr present mais defaillant —
+        # cas qui n'arrive jamais — et pas d'un xattr absent, qui est le cas
+        # reel.
         install: |
-          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+          if OS.mac?
             system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/perctl"]
           end
 
