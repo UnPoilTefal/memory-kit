@@ -89,12 +89,57 @@ func (r *Result) Coverage() float64 {
 // pathRe et consorts : signaux structurels ancres. Chacun exige un prefixe
 // reconnaissable — jamais un motif generique.
 var (
-	pathRe     = regexp.MustCompile(`(?:^|[\s` + "`" + `(])((?:/(?:Users|opt|volume1|etc)/|~/)[\w./\-]{4,})`)
+	pathRe     = regexp.MustCompile(`(?:^|[\s` + "`" + `(])((?:/(?:Users|opt|volume1|etc|Applications)/|~/)[\w./\-]{4,})`)
 	urlRe      = regexp.MustCompile(`https?://[\w.\-]+\.[a-z]{2,}(?:/[\w./\-]*)?`)
 	ipRe       = regexp.MustCompile(`\b(?:192\.168|10\.)\.?\d{0,3}\.?\d{0,3}\.\d{1,3}\b`)
 	semverRe   = regexp.MustCompile(`\bv\d+\.\d+\.\d+\b`)
 	trailingRe = regexp.MustCompile(`[.,;:)` + "`" + `]+$`)
+
+	// absenceRe reconnait une note qui enonce une absence. Seuls des
+	// marqueurs francs : « jamais » ou « aucun » sont trop larges, ils
+	// visaient 24 notes sur 101 dont la plupart n'enoncent aucune absence.
+	absenceRe = regexp.MustCompile(`(?i)n'exist(?:e|ent) plus|(?:a|ont) ete supprim|(?:a|ont) été supprim|n'est plus present|supprime du poste|supprimé du poste`)
+
+	phraseSep = regexp.MustCompile(`[.!?]\s|\n`)
 )
+
+// zonePertinente rend la partie d'une note ou un signal vaut revendication :
+// la description et le premier paragraphe.
+//
+// Mesure sur le corpus de reference : sans cette contrainte, 45 notes portent
+// un signal et la precision apres tri humain tombe a 20 %. Avec, 21 notes et
+// ~38 %. Le cout est reel — une bonne proposition sur neuf est perdue, celle
+// dont le chemin n'apparait qu'au troisieme paragraphe — mais 24 propositions
+// de bruit disparaissent.
+func zonePertinente(n *corpus.Note) string {
+	body := strings.TrimSpace(n.Body)
+	if i := strings.Index(body, "\n\n"); i > 0 {
+		body = body[:i]
+	}
+	return n.Desc + "\n" + body
+}
+
+// enonceUneAbsence dit si la phrase portant le signal affirme que la chose
+// n'existe plus. Une telle note appelle une sonde inversee : « test -e » sur
+// un chemin supprime echouerait alors que la note est vraie.
+//
+// La detection est locale a la phrase, pas a la note : « le chemin X n'existe
+// plus » peut arriver au troisieme paragraphe, loin de la description.
+func enonceUneAbsence(body, signal string) bool {
+	i := strings.Index(body, signal)
+	if i < 0 {
+		return false
+	}
+	debut := 0
+	if locs := phraseSep.FindAllStringIndex(body[:i], -1); len(locs) > 0 {
+		debut = locs[len(locs)-1][1]
+	}
+	fin := len(body)
+	if loc := phraseSep.FindStringIndex(body[i:]); loc != nil {
+		fin = i + loc[1]
+	}
+	return absenceRe.MatchString(body[debut:fin])
+}
 
 // Propose examine un corpus et rend les sondes candidates.
 func Propose(c *corpus.Corpus, reg *perimeter.Registry) *Result {
@@ -131,7 +176,7 @@ func proposeFor(n *corpus.Note, reg *perimeter.Registry) (Proposal, bool) {
 			return p, true
 		}
 	}
-	return fromStructure(n, body)
+	return fromStructure(n, zonePertinente(n), n.Body)
 }
 
 // fromRegistry cherche, pour chaque source declaree, une ancre qui lui soit
@@ -207,16 +252,20 @@ func anchorsFor(adapter, endpoint string) []anchor {
 
 // fromStructure propose depuis un signal reconnaissable sans le registre. La
 // sonde reste en lecture seule et d'une forme connue.
-func fromStructure(n *corpus.Note, body string) (Proposal, bool) {
-	if m := pathRe.FindStringSubmatch(body); m != nil {
+func fromStructure(n *corpus.Note, zone, body string) (Proposal, bool) {
+	if m := pathRe.FindStringSubmatch(zone); m != nil {
 		path := trailingRe.ReplaceAllString(m[1], "")
+		cmd, why := "test -e "+path, "mentionne un chemin absolu"
+		if enonceUneAbsence(body, path) {
+			cmd = "! test -e " + path
+			why = "enonce que ce chemin n'existe plus — sonde inversee"
+		}
 		return Proposal{
 			Note: n.Rel, Kind: KindPath, Confidence: Structural, Match: path,
-			Cmd: fmt.Sprintf("cmd: %q", "test -e "+path),
-			Why: "mentionne un chemin absolu",
+			Cmd: fmt.Sprintf("cmd: %q", cmd), Why: why,
 		}, true
 	}
-	if m := urlRe.FindString(body); m != "" {
+	if m := urlRe.FindString(zone); m != "" {
 		u := trailingRe.ReplaceAllString(m, "")
 		return Proposal{
 			Note: n.Rel, Kind: KindEndpoint, Confidence: Structural, Match: u,
@@ -225,14 +274,14 @@ func fromStructure(n *corpus.Note, body string) (Proposal, bool) {
 			Why:    "mentionne une adresse HTTP",
 		}, true
 	}
-	if m := ipRe.FindString(body); m != "" {
+	if m := ipRe.FindString(zone); m != "" {
 		return Proposal{
 			Note: n.Rel, Kind: KindHost, Confidence: Structural, Match: m,
 			Cmd: fmt.Sprintf("cmd: %q", "ping -c1 -W2 "+m+" >/dev/null"),
 			Why: "mentionne un hote du reseau interne",
 		}, true
 	}
-	if m := semverRe.FindString(body); m != "" {
+	if m := semverRe.FindString(zone); m != "" {
 		return Proposal{
 			Note: n.Rel, Kind: KindVersion, Confidence: Structural, Match: m,
 			Why: "mentionne une version — la sonde depend de ce qui la porte, a completer",

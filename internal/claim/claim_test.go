@@ -251,3 +251,109 @@ func TestCouvertureCompteLesDeuxSources(t *testing.T) {
 		t.Errorf("couverture attendue ~0.667, obtenue %.3f", cov)
 	}
 }
+
+// --- proximite du signal et sonde inversee (#21) ---
+
+// Un signal loin de la revendication est du contexte, pas une assertion.
+// Mesure sur le corpus de reference : sans cette contrainte, 45 notes portent
+// un signal pour une precision de 20 % apres tri ; avec, 21 notes et ~38 %.
+func TestUnSignalLoinDeLaRevendicationEstIgnore(t *testing.T) {
+	loin := "Premier paragraphe sans aucun signal exploitable.\n\n" +
+		"Deuxieme paragraphe qui cite ~/.config/Brewfile au passage."
+	c, reg := setup(t, map[string]string{"reference-loin": loin})
+	r := Propose(c, reg)
+	if p, ok := find(r, "reference-loin"); ok {
+		t.Errorf("aucune proposition attendue, obtenue %s sur %q", p.Kind.Name, p.Match)
+	}
+	if len(r.SansSignal) != 1 {
+		t.Errorf("la note devait etre listee sans signal, obtenu %d", len(r.SansSignal))
+	}
+}
+
+func TestUnSignalDansLePremierParagrapheCompte(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-proche": "Le fichier ~/.config/Brewfile declare les paquets.\n\nSuite sans signal.",
+	})
+	r := Propose(c, reg)
+	if _, ok := find(r, "reference-proche"); !ok {
+		t.Error("un signal dans le premier paragraphe doit fonder une proposition")
+	}
+}
+
+// La description compte aussi : c'est la phrase qui enonce le fait.
+func TestUnSignalDansLaDescriptionCompte(t *testing.T) {
+	dir := t.TempDir()
+	s := "---\nname: reference-desc\ndescription: \"Le fichier ~/.config/Brewfile declare tous les paquets installes\"\nmetadata:\n  type: reference\n  modified: 2026-09-01\n---\n\nParagraphe sans aucun signal.\n"
+	if err := os.WriteFile(filepath.Join(dir, "reference-desc.md"), []byte(s), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := corpus.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(Propose(c, nil).Proposals) != 1 {
+		t.Error("un signal dans la description doit fonder une proposition")
+	}
+}
+
+// Une note qui enonce une absence appelle une sonde inversee. « test -e » sur
+// un chemin supprime echouerait alors meme que la note dit vrai.
+func TestUneNoteQuiEnonceUneAbsenceInverseLaSonde(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-disparu": "Le chemin ~/Developer/sources/ancien n'existe plus. Il a ete supprime le 2026-08-15.",
+	})
+	p, ok := find(Propose(c, reg), "reference-disparu")
+	if !ok {
+		t.Fatal("une proposition etait attendue")
+	}
+	if !strings.HasPrefix(p.Cmd, `cmd: "! test -e`) {
+		t.Errorf("sonde inversee attendue, obtenue %q", p.Cmd)
+	}
+	if !strings.Contains(p.Why, "inversee") {
+		t.Errorf("la raison doit dire pourquoi : %q", p.Why)
+	}
+}
+
+func TestUnePresenceNInversePas(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-present": "Le fichier ~/.config/Brewfile declare les paquets installes.",
+	})
+	p, _ := find(Propose(c, reg), "reference-present")
+	if strings.Contains(p.Cmd, "! test") {
+		t.Errorf("aucune inversion attendue : %q", p.Cmd)
+	}
+}
+
+// La detection d'absence est locale a la phrase : une absence enoncee ailleurs
+// dans la note ne doit pas inverser une sonde qui porte sur autre chose.
+func TestLAbsenceEstLocaleALaPhrase(t *testing.T) {
+	c, reg := setup(t, map[string]string{
+		"reference-mixte": "Le fichier ~/.config/Brewfile declare les paquets. " +
+			"L'ancien repertoire de builds n'existe plus.",
+	})
+	p, ok := find(Propose(c, reg), "reference-mixte")
+	if !ok {
+		t.Fatal("une proposition etait attendue")
+	}
+	if strings.Contains(p.Cmd, "! test") {
+		t.Errorf("l'absence porte sur une autre phrase, pas d'inversion : %q", p.Cmd)
+	}
+}
+
+// « jamais » et « aucun » visaient 24 notes sur 101 : trop large pour fonder
+// une inversion, volontairement hors des marqueurs retenus.
+func TestLesMarqueursLargesNInversentPas(t *testing.T) {
+	for _, phrase := range []string{
+		"Le fichier ~/.config/Brewfile ne doit jamais etre edite a la main.",
+		"Aucun paquet n'est installe hors de ~/.config/Brewfile.",
+	} {
+		c, reg := setup(t, map[string]string{"reference-large": phrase})
+		p, ok := find(Propose(c, reg), "reference-large")
+		if !ok {
+			t.Fatalf("proposition attendue pour %q", phrase)
+		}
+		if strings.Contains(p.Cmd, "! test") {
+			t.Errorf("marqueur trop large, pas d'inversion attendue : %q", p.Cmd)
+		}
+	}
+}
