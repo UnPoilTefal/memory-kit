@@ -155,6 +155,14 @@ func termes(n *corpus.Note) map[string]bool {
 	return out
 }
 
+// Voisinage rend les notes du corpus les plus proches d'une note donnee, avec
+// leurs termes communs. Exporte parce que « harvest » pose exactement la meme
+// question qu'un brouillon humain — « est-ce que ca existe deja ? » — et n'a
+// aucune raison de la reimplementer.
+func Voisinage(c *corpus.Corpus, n *corpus.Note, plafond int) []Voisin {
+	return voisinage(c, n, plafond)
+}
+
 func voisinage(c *corpus.Corpus, n *corpus.Note, plafond int) []Voisin {
 	if plafond <= 0 {
 		plafond = voisinsParDefaut

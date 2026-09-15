@@ -597,6 +597,36 @@ Trois questions avant d'écrire quoi que ce soit. Une seule réponse négative, 
 Plus une contrainte dure : **un fait par fichier**. C'est ce qui rend le dédoublonnage et
 la péremption praticables.
 
+### Amorcer un corpus — `perctl harvest`
+
+Une équipe qui adopte l'outil part de zéro, là où un corpus organique met **deux ans** à se
+constituer. `harvest` lit les traces déjà là et en propose des candidats — il **n'écrit jamais**,
+et tout candidat arrive en `trust: proposed`.
+
+```bash
+perctl harvest --allow-exec --limite 25
+```
+
+**La porte de périmètre est structurelle** : `harvest` ne lit que la source rattachée à
+`etat.declare` dans le registre. Un candidat vient donc d'une source déclarée, par construction.
+C'est important pour la suite : un transcript de session d'agent, lui, enregistre **tout ce qui
+s'est dit devant l'agent** — périmètre ou non. Mesuré sur un corpus réel, il contenait du personnel
+sans rapport avec le périmètre technique. Sur un corpus d'équipe ce n'est pas du bruit, c'est une
+fuite — et la règle `secret` ne l'attraperait pas, elle cherche des identifiants, pas du hors-sujet.
+Cette source demandera donc une porte explicite, elle n'est pas lue aujourd'hui.
+
+**Le filtrage est volontairement agressif.** Un candidat doit porter **deux** signaux : une
+formulation qui dit ce qui *ne marche pas*, et une explication. Mesure sur 263 commits d'un dépôt
+réel : 69 corps portent un piège, 38 un pourquoi, **20 les deux**. Un harvest qui proposerait tout
+ce qu'il trouve reproduirait le problème qu'il prétend résoudre.
+
+La raison du double signal tient à l'axiome : un message qui décrit ce que le commit **fait** se
+redemande au diff. Ce qui ne se redérive pas, c'est le piège et le pourquoi.
+
+⚠️ Le voisinage rendu par candidat **classe, il ne tranche pas** — voir `draft` ci-dessous. Sur 20
+candidats réels, un seuil à 0,15 marquait un vrai doublon, un faux, et en manquait un troisième
+dont la note sortait pourtant en tête. Aucun marqueur binaire n'est donc rendu.
+
 ### Vérifier un brouillon — `perctl draft`
 
 Le portillon ne se mécanise pas : les trois questions sont des jugements, et un
