@@ -1,6 +1,7 @@
 package harvest
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -213,4 +214,116 @@ func refs(r *Result) []string {
 		out = append(out, c.Ref)
 	}
 	return out
+}
+
+// registreMulti declare plusieurs depots sur etat.declare, avec qualifiers —
+// c'est la configuration « tour de controle » que #27 a rendue exprimable.
+func registreMulti(t *testing.T, avecNonGit bool) *perimeter.Registry {
+	t.Helper()
+	declare := `
+  etat.declare:
+    - { source: d1, qualifier: un }
+    - { source: d2, qualifier: deux }`
+	sources := `
+  d1: { adapter: git, reliability: declared, endpoint: "/tmp/d1", probe: { cmd: "true" } }
+  d2: { adapter: git, reliability: declared, endpoint: "/tmp/d2", probe: { cmd: "true" } }`
+	if avecNonGit {
+		declare += `
+    - { source: d3, qualifier: trois }`
+		sources += `
+  d3: { adapter: http, reliability: measured, endpoint: "https://exemple", probe: { cmd: "true" } }`
+	}
+	body := `version: 1
+roles:
+  intention.spec:        { source: s }
+  intention.tickets:     { source: s }
+  contrainte.decisions:  { source: s }
+  contrainte.memoire:    { source: s }
+  etat.reel:             { source: s }` + declare + `
+sources:
+  s: { adapter: files, reliability: declared, probe: { cmd: "true" } }` + sources + "\n"
+	f := filepath.Join(t.TempDir(), "perimeter.yml")
+	if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	reg, err := perimeter.Load(f)
+	if err != nil {
+		t.Fatalf("registre : %v", err)
+	}
+	return reg
+}
+
+// parSource rend un lecteur qui sert des traces differentes selon l'endpoint.
+func parSource(n int) Lecteur {
+	return func(_, endpoint string, _ Options) ([]Element, error) {
+		var out []Element
+		for i := 0; i < n; i++ {
+			out = append(out, Element{Ref: fmt.Sprintf("%s-%d", filepath.Base(endpoint), i), Titre: "t", Corps: piege})
+		}
+		return out, nil
+	}
+}
+
+// I1 — toutes les sources git declarees sont lues. N'en lire qu'une, et se
+// taire sur les autres, presente une moisson partielle comme complete : c'est
+// plus dangereux qu'une moisson vide.
+func TestToutesLesSourcesGitSontLues(t *testing.T) {
+	r := lance(t, corpusVide(t), registreMulti(t, false), parSource(2), Options{})
+
+	if r.Lus != 4 {
+		t.Errorf("2 sources x 2 traces = 4 lues attendues, %d", r.Lus)
+	}
+	vues := map[string]bool{}
+	for _, c := range r.Candidats {
+		vues[c.Source] = true
+	}
+	for _, s := range []string{"d1", "d2"} {
+		if !vues[s] {
+			t.Errorf("la source %s n'a pas ete lue : %v", s, vues)
+		}
+	}
+}
+
+// I2 — chaque candidat dit d'ou il vient, qualifier compris. Sans ca, la
+// relecture ne peut pas rattacher un candidat a son depot.
+func TestChaqueCandidatPorteSaSourceEtSonQualifier(t *testing.T) {
+	r := lance(t, corpusVide(t), registreMulti(t, false), parSource(1), Options{})
+	for _, c := range r.Candidats {
+		if c.Source == "" || c.Qualifier == "" {
+			t.Errorf("candidat sans provenance complete : %+v", c)
+		}
+	}
+}
+
+// I3 — une source non lisible est nommee, pas ignoree en silence. Le silence
+// est precisement le defaut qu'on corrige.
+func TestUneSourceNonLisibleEstNommee(t *testing.T) {
+	r := lance(t, corpusVide(t), registreMulti(t, true), parSource(1), Options{})
+	if len(r.Ignorees) != 1 || r.Ignorees[0].Source != "d3" {
+		t.Fatalf("la source http devait etre nommee comme ignoree, obtenu %+v", r.Ignorees)
+	}
+	if r.Ignorees[0].Raison == "" {
+		t.Error("l'ignorance doit porter sa raison")
+	}
+}
+
+// I4 — le plafond est global et se repartit entre sources : un plafond par
+// source ferait mentir le chiffre annonce, et un plafond global servi source
+// par source affamerait les dernieres.
+func TestLePlafondSeRepartitEntreLesSources(t *testing.T) {
+	r := lance(t, corpusVide(t), registreMulti(t, false), parSource(10), Options{Limite: 4})
+
+	if len(r.Candidats) != 4 {
+		t.Fatalf("plafond a 4 : 4 candidats attendus, %d", len(r.Candidats))
+	}
+	compte := map[string]int{}
+	for _, c := range r.Candidats {
+		compte[c.Source]++
+	}
+	if compte["d1"] != 2 || compte["d2"] != 2 {
+		t.Errorf("le plafond doit se repartir, obtenu %v", compte)
+	}
+	if r.Retenus != 20 {
+		t.Errorf("le total reellement retenu doit rester visible (20), obtenu %d", r.Retenus)
+	}
 }
